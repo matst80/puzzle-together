@@ -1,20 +1,28 @@
 import * as THREE from "three";
 
+class Neighbor {
+  constructor(type, id, profile, piece = null) {
+    this.type = type; // 'in' or 'out' or null
+    this.id = id;
+    this.profile = profile;
+    this.piece = piece; // reference to neighbor piece
+  }
+}
+
+class Connector {
+  constructor(profile) {
+    this.profile = profile; // shared profile
+    this.id = null;
+  }
+}
+
 class Piece {
-  constructor(i, j, pieceSize, numPiecesX, numPiecesY, connectors, texture) {
+  constructor(i, j, pieceSize, numPiecesX, numPiecesY, texture) {
     this.i = i;
     this.j = j;
     this.size = pieceSize;
-    this.connectors = connectors;
-    this.geometry = Piece.createGeometry(
-      pieceSize,
-      i,
-      j,
-      numPiecesX,
-      numPiecesY,
-      connectors
-    );
-    // Always use MeshStandardMaterial, but set map only if texture is provided
+    this.neighbors = { top: null, right: null, bottom: null, left: null };
+    this.connectors = { top: null, right: null, bottom: null, left: null };
     this.material = new THREE.MeshStandardMaterial({
       map: texture || null,
       color: texture
@@ -23,34 +31,69 @@ class Piece {
       metalness: 0.3,
       roughness: 0.6,
     });
-    if (texture) {
-      console.log(
-        `Calling applyUVs for piece (${i}, ${j}) with texture:`,
-        texture
-      );
-      Piece.applyUVs(this.geometry, i, j, numPiecesX, numPiecesY, pieceSize);
-    }
-    this.mesh = new THREE.Mesh(this.geometry, this.material);
-    if (texture) this.material.needsUpdate = true;
-    this.mesh.userData.correctPosition = {
-      x: (i - numPiecesX / 2) * pieceSize * 1.1,
-      y: (j - numPiecesY / 2) * pieceSize * 1.1,
-      z: 0,
-    };
-    this.mesh.userData.isSnapped = false;
+    // Geometry will be created after neighbors and connectors are set
+    this.mesh = null;
   }
-  static createGeometry(size, x, y, numX, numY, connectors) {
+  createGeometry(numPiecesX, numPiecesY, texture) {
+    const size = this.size;
+    const x = this.i;
+    const y = this.j;
+    const connectors = this.connectors;
     const shape = new THREE.Shape();
     const half = size / 2;
     shape.moveTo(-half, -half);
-    if (connectors.top === null) shape.lineTo(half, -half);
-    else addConnector(shape, half, 1, connectors.top, connectors.topId);
-    if (connectors.right === null) shape.lineTo(half, half);
-    else addConnector(shape, half, 2, connectors.right, connectors.rightId);
-    if (connectors.bottom === null) shape.lineTo(-half, half);
-    else addConnector(shape, half, 3, connectors.bottom, connectors.bottomId);
-    if (connectors.left === null) shape.lineTo(-half, -half);
-    else addConnector(shape, half, 4, connectors.left, connectors.leftId);
+    // Top (flat if on top edge)
+    if (y === 0) {
+      shape.lineTo(half, -half);
+    } else {
+      addConnector(
+        shape,
+        half,
+        1,
+        "in",
+        connectors.top.id,
+        connectors.top.profile
+      );
+    }
+    // Right (flat if on right edge)
+    if (x === numPiecesX - 1) {
+      shape.lineTo(half, half);
+    } else {
+      addConnector(
+        shape,
+        half,
+        2,
+        "in",
+        connectors.right.id,
+        connectors.right.profile
+      );
+    }
+    // Bottom (flat if on bottom edge)
+    if (y === numPiecesY - 1) {
+      shape.lineTo(-half, half);
+    } else {
+      addConnector(
+        shape,
+        half,
+        3,
+        "out",
+        connectors.bottom.id,
+        connectors.bottom.profile
+      );
+    }
+    // Left (flat if on left edge)
+    if (x === 0) {
+      shape.lineTo(-half, -half);
+    } else {
+      addConnector(
+        shape,
+        half,
+        4,
+        "out",
+        connectors.left.id,
+        connectors.left.profile
+      );
+    }
     const extrudeSettings = {
       steps: 2,
       depth: size / 4,
@@ -60,7 +103,20 @@ class Piece {
       bevelOffset: 0,
       bevelSegments: 5,
     };
-    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    if (texture) {
+      Piece.applyUVs(geometry, x, y, numPiecesX, numPiecesY, size);
+    }
+    this.mesh = new THREE.Mesh(geometry, this.material);
+    if (texture) this.material.needsUpdate = true;
+    this.mesh.userData.correctPosition = {
+      x: (x - numPiecesX / 2) * size * 1.1,
+      y: (y - numPiecesY / 2) * size * 1.1,
+      z: 0,
+    };
+    this.mesh.userData.isSnapped = false;
+    this.mesh.userData.correctI = x;
+    this.mesh.userData.correctJ = y;
   }
   static applyUVs(geometry, i, j, numX, numY, pieceSize) {
     const uvAttribute = geometry.getAttribute("uv");
@@ -68,15 +124,9 @@ class Piece {
     for (let k = 0; k < uvAttribute.count; k++) {
       const x = position.getX(k);
       const y = position.getY(k);
-      // Clamp x/y to the central square (exclude connectors)
-      const clampX = Math.max(-pieceSize / 2, Math.min(pieceSize / 2, x));
-      const clampY = Math.max(-pieceSize / 2, Math.min(pieceSize / 2, y));
-      // Map to [0,1] range for the whole puzzle, using grid position
-      const u = (i + (clampX + pieceSize / 2) / pieceSize) / numX;
-      const v = (j + (clampY + pieceSize / 2) / pieceSize) / numY;
-      console.log(
-        `Setting UV for piece (${i}, ${j}) at index ${k}: u=${u}, v=${v}`
-      );
+      // Use full x/y including connectors for UV mapping
+      const u = (i + (x + pieceSize / 2) / pieceSize) / numX;
+      const v = (j + (y + pieceSize / 2) / pieceSize) / numY;
       uvAttribute.setXY(k, u, v);
     }
   }
@@ -146,122 +196,146 @@ class Board {
   }
   createPieces() {
     let connectorId = 1;
-    const connectors = Array.from({ length: this.numPiecesX }, () =>
-      Array.from({ length: this.numPiecesY }, () => ({
-        top: null,
-        right: null,
-        bottom: null,
-        left: null,
-        topId: null,
-        rightId: null,
-        bottomId: null,
-        leftId: null,
-      }))
-    );
-    // Generate all piece indices
-    const indices = [];
+    // Create all pieces
+    const pieces = [];
     for (let i = 0; i < this.numPiecesX; i++) {
       for (let j = 0; j < this.numPiecesY; j++) {
-        indices.push({ i, j });
+        pieces.push(
+          new Piece(
+            i,
+            j,
+            this.pieceSize,
+            this.numPiecesX,
+            this.numPiecesY,
+            this.texture
+          )
+        );
       }
     }
-    // Shuffle all pieces
-    for (let k = indices.length - 1; k > 0; k--) {
-      const swap = Math.floor(Math.random() * (k + 1));
-      [indices[k], indices[swap]] = [indices[swap], indices[k]];
-    }
-    // Place pieces in grid order for correct connector matching
-    const placedPositions = [];
-    for (let idx = 0; idx < indices.length; idx++) {
-      const { i, j } = indices[idx];
-      // Assign connectors so neighbors match
+    // Set neighbors and connectors
+    for (const piece of pieces) {
+      const i = piece.i;
+      const j = piece.j;
+      // Top neighbor
       if (j > 0) {
-        connectors[i][j].top =
-          connectors[i][j - 1].bottom === "out" ? "in" : "out";
-        connectors[i][j].topId = connectors[i][j - 1].bottomId;
+        const neighbor = pieces.find((p) => p.i === i && p.j === j - 1);
+        piece.neighbors.top = neighbor;
+        piece.connectors.top = neighbor.connectors.bottom;
       } else {
-        connectors[i][j].top = null;
-        connectors[i][j].topId = null;
+        piece.connectors.top = new Connector([
+          Math.random(),
+          Math.random(),
+          Math.random(),
+          Math.random(),
+        ]);
+        piece.connectors.top.id = connectorId++;
       }
+      // Left neighbor
       if (i > 0) {
-        connectors[i][j].left =
-          connectors[i - 1][j].right === "out" ? "in" : "out";
-        connectors[i][j].leftId = connectors[i - 1][j].rightId;
+        const neighbor = pieces.find((p) => p.i === i - 1 && p.j === j);
+        piece.neighbors.left = neighbor;
+        piece.connectors.left = neighbor.connectors.right;
       } else {
-        connectors[i][j].left = null;
-        connectors[i][j].leftId = null;
+        piece.connectors.left = new Connector([
+          Math.random(),
+          Math.random(),
+          Math.random(),
+          Math.random(),
+        ]);
+        piece.connectors.left.id = connectorId++;
       }
+      // Right neighbor
       if (i < this.numPiecesX - 1) {
-        connectors[i][j].right = Math.random() > 0.5 ? "out" : "in";
-        connectors[i][j].rightId = connectorId++;
+        const neighbor = pieces.find((p) => p.i === i + 1 && p.j === j);
+        piece.neighbors.right = neighbor;
+        // Create connector only if not already set by left neighbor
+        if (!neighbor.connectors.left) {
+          const conn = new Connector([
+            Math.random(),
+            Math.random(),
+            Math.random(),
+            Math.random(),
+          ]);
+          conn.id = connectorId++;
+          piece.connectors.right = conn;
+          neighbor.connectors.left = conn;
+        } else {
+          piece.connectors.right = neighbor.connectors.left;
+        }
       } else {
-        connectors[i][j].right = null;
-        connectors[i][j].rightId = null;
+        piece.connectors.right = new Connector([
+          Math.random(),
+          Math.random(),
+          Math.random(),
+          Math.random(),
+        ]);
+        piece.connectors.right.id = connectorId++;
       }
+      // Bottom neighbor
       if (j < this.numPiecesY - 1) {
-        connectors[i][j].bottom = Math.random() > 0.5 ? "out" : "in";
-        connectors[i][j].bottomId = connectorId++;
+        const neighbor = pieces.find((p) => p.i === i && p.j === j + 1);
+        piece.neighbors.bottom = neighbor;
+        // Create connector only if not already set by top neighbor
+        if (!neighbor.connectors.top) {
+          const conn = new Connector([
+            Math.random(),
+            Math.random(),
+            Math.random(),
+            Math.random(),
+          ]);
+          conn.id = connectorId++;
+          piece.connectors.bottom = conn;
+          neighbor.connectors.top = conn;
+        } else {
+          piece.connectors.bottom = neighbor.connectors.top;
+        }
       } else {
-        connectors[i][j].bottom = null;
-        connectors[i][j].bottomId = null;
+        piece.connectors.bottom = new Connector([
+          Math.random(),
+          Math.random(),
+          Math.random(),
+          Math.random(),
+        ]);
+        piece.connectors.bottom.id = connectorId++;
       }
-      const piece = new Piece(
-        i,
-        j,
-        this.pieceSize,
-        this.numPiecesX,
-        this.numPiecesY,
-        connectors[i][j],
-        this.texture
-      );
+    }
+    // Create geometry and add to scene
+    const placedPositions = [];
+    for (const piece of pieces) {
+      piece.createGeometry(this.numPiecesX, this.numPiecesY, this.texture);
       let gridX, gridY;
       const gap = 0.04;
-      // Place snapped pieces in correct position
-      if (idx < 0) {
-        // No snapped pieces at start
-        piece.mesh.userData.isSnapped = true;
-        gridX = (i - this.numPiecesX / 2 + 0.5) * this.pieceSize + i * gap;
-        gridY = (j - this.numPiecesY / 2 + 0.5) * this.pieceSize + j * gap;
-      } else {
-        // Randomize position outside puzzle area, avoid overlap
-        let tries = 0;
-        let valid = false;
-        while (!valid && tries < 100) {
-          // Table bounds
-          const halfW = this.tableWidth / 2 - this.pieceSize / 2;
-          const halfH = this.tableHeight / 2 - this.pieceSize / 2;
-          // Puzzle area bounds
-          const puzzleHalfW = (this.numPiecesX * this.pieceSize) / 2;
-          const puzzleHalfH = (this.numPiecesY * this.pieceSize) / 2;
-          gridX = Math.random() * (halfW * 2) - halfW;
-          gridY = Math.random() * (halfH * 2) - halfH;
-          // Exclude puzzle area
-          if (Math.abs(gridX) < puzzleHalfW && Math.abs(gridY) < puzzleHalfH) {
-            tries++;
-            continue;
-          }
-          // Check overlap
-          valid = true;
-          for (const pos of placedPositions) {
-            const dx = gridX - pos.x;
-            const dy = gridY - pos.y;
-            if (Math.sqrt(dx * dx + dy * dy) < this.pieceSize * 1.05) {
-              valid = false;
-              break;
-            }
-          }
+      let tries = 0;
+      let valid = false;
+      while (!valid && tries < 100) {
+        const halfW = this.tableWidth / 2 - this.pieceSize / 2;
+        const halfH = this.tableHeight / 2 - this.pieceSize / 2;
+        const puzzleHalfW = (this.numPiecesX * this.pieceSize) / 2;
+        const puzzleHalfH = (this.numPiecesY * this.pieceSize) / 2;
+        gridX = Math.random() * (halfW * 2) - halfW;
+        gridY = Math.random() * (halfH * 2) - halfH;
+        if (Math.abs(gridX) < puzzleHalfW && Math.abs(gridY) < puzzleHalfH) {
           tries++;
+          continue;
         }
-        piece.mesh.userData.isSnapped = false;
+        valid = true;
+        for (const pos of placedPositions) {
+          const dx = gridX - pos.x;
+          const dy = gridY - pos.y;
+          if (Math.sqrt(dx * dx + dy * dy) < this.pieceSize * 1.05) {
+            valid = false;
+            break;
+          }
+        }
+        tries++;
       }
       piece.mesh.position.set(gridX, gridY, 0);
       piece.mesh.rotation.z = 0;
-      piece.mesh.userData.correctI = i;
-      piece.mesh.userData.correctJ = j;
       placedPositions.push({ x: gridX, y: gridY });
       this.pieces.push(piece.mesh);
       this.group.add(piece.mesh);
     }
+    // Optionally, update neighbor.piece to reference actual mesh if needed
   }
   getPlacementStats() {
     // Tray is defined as below the table (y < -tableHeight/2)
@@ -272,8 +346,8 @@ class Board {
         // Check if snapped to correct position
         const i = piece.userData.correctI;
         const j = piece.userData.correctJ;
-        const gridX = (i - this.numPiecesX / 2 + 0.5) * this.pieceSize;
-        const gridY = (j - this.numPiecesY / 2 + 0.5) * this.pieceSize;
+        const gridX = (i - this.numPiecesX / 2) * this.pieceSize;
+        const gridY = (j - this.numPiecesY / 2) * this.pieceSize;
         if (
           Math.abs(piece.position.x - gridX) < 0.01 &&
           Math.abs(piece.position.y - gridY) < 0.01 &&
@@ -670,29 +744,31 @@ export function createPuzzle(scene) {
   );
 }
 
-function addConnector(shape, half, side, connectorType, connectorId) {
+function addConnector(shape, half, side, connectorType, connectorId, profile) {
   const c = half * 0.4; // connector size
-  const seed = connectorId || 0;
-  const offset = Math.sin(seed) * c * 0.2;
-
+  // Mirror profile for 'in' connectors so cutout matches protrusion
+  let p = profile || [0, 0, 0, 0];
+  if (connectorType === "in") {
+    p = [...p].reverse();
+  }
   switch (side) {
     case 1: // Top
       shape.lineTo(-c, -half);
       if (connectorType === "out") {
         shape.bezierCurveTo(
-          -c + offset,
-          -half - c,
-          c + offset,
-          -half - c,
+          -c + p[0] * c,
+          -half - c - p[1] * c,
+          c + p[2] * c,
+          -half - c - p[3] * c,
           c,
           -half
         );
       } else {
         shape.bezierCurveTo(
-          -c + offset,
-          -half + c,
-          c + offset,
-          -half + c,
+          -c + p[0] * c,
+          -half + c + p[1] * c,
+          c + p[2] * c,
+          -half + c + p[3] * c,
           c,
           -half
         );
@@ -703,19 +779,19 @@ function addConnector(shape, half, side, connectorType, connectorId) {
       shape.lineTo(half, -c);
       if (connectorType === "out") {
         shape.bezierCurveTo(
-          half + c,
-          -c + offset,
-          half + c,
-          c + offset,
+          half + c + p[0] * c,
+          -c + p[1] * c,
+          half + c + p[2] * c,
+          c + p[3] * c,
           half,
           c
         );
       } else {
         shape.bezierCurveTo(
-          half - c,
-          -c + offset,
-          half - c,
-          c + offset,
+          half - c - p[0] * c,
+          -c + p[1] * c,
+          half - c - p[2] * c,
+          c + p[3] * c,
           half,
           c
         );
@@ -726,19 +802,19 @@ function addConnector(shape, half, side, connectorType, connectorId) {
       shape.lineTo(c, half);
       if (connectorType === "out") {
         shape.bezierCurveTo(
-          c + offset,
-          half + c,
-          -c + offset,
-          half + c,
+          c + p[0] * c,
+          half + c + p[1] * c,
+          -c + p[2] * c,
+          half + c + p[3] * c,
           -c,
           half
         );
       } else {
         shape.bezierCurveTo(
-          c + offset,
-          half - c,
-          -c + offset,
-          half - c,
+          c + p[0] * c,
+          half - c - p[1] * c,
+          -c + p[2] * c,
+          half - c - p[3] * c,
           -c,
           half
         );
@@ -749,19 +825,19 @@ function addConnector(shape, half, side, connectorType, connectorId) {
       shape.lineTo(-half, c);
       if (connectorType === "out") {
         shape.bezierCurveTo(
-          -half - c,
-          c + offset,
-          -half - c,
-          -c + offset,
+          -half - c - p[0] * c,
+          c + p[1] * c,
+          -half - c - p[2] * c,
+          -c + p[3] * c,
           -half,
           -c
         );
       } else {
         shape.bezierCurveTo(
-          -half + c,
-          c + offset,
-          -half + c,
-          -c + offset,
+          -half + c + p[0] * c,
+          c + p[1] * c,
+          -half + c + p[2] * c,
+          -c + p[3] * c,
           -half,
           -c
         );
