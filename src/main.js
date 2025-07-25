@@ -1,7 +1,7 @@
 import "./style.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { createPuzzle } from "./puzzle.js";
+import { createPuzzle, disposePuzzle } from "./puzzle.js";
 
 // Scene
 const scene = new THREE.Scene();
@@ -37,8 +37,42 @@ const controls = new OrbitControls(camera, renderer.domElement);
 scene.userData.camera = camera;
 scene.userData.controls = controls;
 
-// Create Puzzle
-createPuzzle(scene);
+// Get slider and value display
+const pieceSlider = document.getElementById("pieceSlider");
+const pieceCountLabel = document.getElementById("pieceCount");
+let currentPuzzleGroup = null;
+let currentPuzzleListeners = null;
+const BOARD_SIZE = 4; // Fixed board size
+
+function recreatePuzzle(numPieces) {
+  // Remove and dispose previous puzzle group only
+  if (currentPuzzleGroup) {
+    disposePuzzle(scene, currentPuzzleGroup, currentPuzzleListeners);
+    currentPuzzleGroup = null;
+    currentPuzzleListeners = null;
+  }
+  // Create puzzle pieces only (board size fixed, piece size changes)
+  createPuzzle(scene, numPieces, BOARD_SIZE, (newGroup, listeners) => {
+    if (currentPuzzleGroup) {
+      disposePuzzle(scene, currentPuzzleGroup, currentPuzzleListeners);
+      currentPuzzleGroup = null;
+      currentPuzzleListeners = null;
+    }
+    currentPuzzleGroup = newGroup;
+    currentPuzzleListeners = listeners;
+  });
+}
+
+// Initial puzzle
+let initialPieces = parseInt(pieceSlider.value, 10);
+pieceCountLabel.textContent = initialPieces;
+recreatePuzzle(initialPieces);
+
+pieceSlider.addEventListener("input", (e) => {
+  const val = parseInt(e.target.value, 10);
+  pieceCountLabel.textContent = val;
+  recreatePuzzle(val);
+});
 
 function animate() {
   requestAnimationFrame(animate);

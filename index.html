@@ -5,9 +5,25 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Puzzle Game</title>
+    <style>
+      #controls {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 1000;
+        background-color: rgba(255, 255, 255, 0.8);
+        padding: 10px;
+        border-radius: 5px;
+      }
+    </style>
   </head>
   <body>
     <canvas id="bg"></canvas>
+    <div id="controls">
+      <label id="sliderLabel" for="pieceSlider">Pieces per side:</label>
+      <input type="range" id="pieceSlider" min="2" max="10" value="4" />
+      <span id="pieceCount">4</span>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -34,6 +34,107 @@ class Piece {
     // Geometry will be created after neighbors and connectors are set
     this.mesh = null;
   }
+  static addConnector(shape, half, side, connectorType, connectorId, profile) {
+    const c = half * 0.4; // connector size
+    let p = profile || [0, 0, 0, 0];
+    if (connectorType === "in") {
+      p = [...p].reverse();
+    }
+    switch (side) {
+      case 1: // Top
+        shape.lineTo(-c, -half);
+        if (connectorType === "out") {
+          shape.bezierCurveTo(
+            -c + p[0] * c,
+            -half - c - p[1] * c,
+            c + p[2] * c,
+            -half - c - p[3] * c,
+            c,
+            -half
+          );
+        } else {
+          shape.bezierCurveTo(
+            -c + p[0] * c,
+            -half + c + p[1] * c,
+            c + p[2] * c,
+            -half + c + p[3] * c,
+            c,
+            -half
+          );
+        }
+        shape.lineTo(half, -half);
+        break;
+      case 2: // Right
+        shape.lineTo(half, -c);
+        if (connectorType === "out") {
+          shape.bezierCurveTo(
+            half + c + p[0] * c,
+            -c + p[1] * c,
+            half + c + p[2] * c,
+            c + p[3] * c,
+            half,
+            c
+          );
+        } else {
+          shape.bezierCurveTo(
+            half - c - p[0] * c,
+            -c + p[1] * c,
+            half - c - p[2] * c,
+            c + p[3] * c,
+            half,
+            c
+          );
+        }
+        shape.lineTo(half, half);
+        break;
+      case 3: // Bottom
+        shape.lineTo(c, half);
+        if (connectorType === "out") {
+          shape.bezierCurveTo(
+            c + p[0] * c,
+            half + c + p[1] * c,
+            -c + p[2] * c,
+            half + c + p[3] * c,
+            -c,
+            half
+          );
+        } else {
+          shape.bezierCurveTo(
+            c + p[0] * c,
+            half - c - p[1] * c,
+            -c + p[2] * c,
+            half - c - p[3] * c,
+            -c,
+            half
+          );
+        }
+        shape.lineTo(-half, half);
+        break;
+      case 4: // Left
+        shape.lineTo(-half, c);
+        if (connectorType === "out") {
+          shape.bezierCurveTo(
+            -half - c - p[0] * c,
+            c + p[1] * c,
+            -half - c - p[2] * c,
+            -c + p[3] * c,
+            -half,
+            -c
+          );
+        } else {
+          shape.bezierCurveTo(
+            -half + c + p[0] * c,
+            c + p[1] * c,
+            -half + c + p[2] * c,
+            -c + p[3] * c,
+            -half,
+            -c
+          );
+        }
+        shape.lineTo(-half, -half);
+        break;
+    }
+  }
   createGeometry(numPiecesX, numPiecesY, texture) {
     const size = this.size;
     const x = this.i;
@@ -46,7 +147,7 @@ class Piece {
     if (y === 0) {
       shape.lineTo(half, -half);
     } else {
-      addConnector(
+      Piece.addConnector(
         shape,
         half,
         1,
@@ -59,7 +160,7 @@ class Piece {
     if (x === numPiecesX - 1) {
       shape.lineTo(half, half);
     } else {
-      addConnector(
+      Piece.addConnector(
         shape,
         half,
         2,
@@ -72,7 +173,7 @@ class Piece {
     if (y === numPiecesY - 1) {
       shape.lineTo(-half, half);
     } else {
-      addConnector(
+      Piece.addConnector(
         shape,
         half,
         3,
@@ -85,7 +186,7 @@ class Piece {
     if (x === 0) {
       shape.lineTo(-half, -half);
     } else {
-      addConnector(
+      Piece.addConnector(
         shape,
         half,
         4,
@@ -135,7 +236,6 @@ class Piece {
 class Board {
   constructor(scene, pieceSize, numPiecesX, numPiecesY, texture) {
     this.scene = scene;
-    // Make puzzle fit table exactly, no gaps
     this.pieceSize = pieceSize;
     this.numPiecesX = numPiecesX;
     this.numPiecesY = numPiecesY;
@@ -144,6 +244,7 @@ class Board {
     this.group = new THREE.Group();
     this.createTable();
     this.createPieces();
+    // Only add the group to the scene
     scene.add(this.group);
   }
   createTable() {
@@ -161,7 +262,7 @@ class Board {
     table.position.set(0, 0, -tableThickness / 2 - 0.01);
     table.rotation.z = 0;
     table.receiveShadow = true;
-    this.scene.add(table);
+    this.group.add(table); // Add to group, not scene
     this.tableWidth = tableWidth;
     this.tableHeight = tableHeight;
 
@@ -191,7 +292,7 @@ class Board {
       puzzleImage.position.set(0, 0, -puzzleThickness / 2 - 0.005);
       puzzleImage.rotation.z = 0;
       puzzleImage.receiveShadow = false;
-      this.scene.add(puzzleImage);
+      this.group.add(puzzleImage); // Add to group, not scene
     }
   }
   createPieces() {
@@ -370,53 +471,124 @@ class Board {
   }
 }
 
-const SNAP_DISTANCE = 0.5;
 const SNAP_ROTATION = 0.4;
+// SNAP_DISTANCE now depends on pieceSize, set in PuzzleScene constructor
 
 class PuzzleScene {
-  constructor(scene, pieceSize, numPiecesX, numPiecesY, texture) {
+  constructor(scene, pieceSize, numPiecesX, numPiecesY, texture, onReady) {
     this.scene = scene;
+    this.pieceSize = pieceSize;
+    this.numPiecesX = numPiecesX;
+    this.numPiecesY = numPiecesY;
+    this.SNAP_DISTANCE = pieceSize * 0.6;
     this.board = new Board(scene, pieceSize, numPiecesX, numPiecesY, texture);
     this.pieces = this.board.pieces;
     this.tableWidth = this.board.tableWidth;
     this.tableHeight = this.board.tableHeight;
+    this.listeners = [];
     this.enableDragging();
+    if (onReady) onReady(this.board.group, this.listeners);
   }
+
+  getGridPosition(i, j) {
+    return {
+      x: (i - this.numPiecesX / 2) * this.pieceSize,
+      y: (j - this.numPiecesY / 2) * this.pieceSize,
+      z: 0,
+    };
+  }
+
+  snapPiece(piece) {
+    const i = piece.userData.correctI ?? piece.i;
+    const j = piece.userData.correctJ ?? piece.j;
+    const snapAngles = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
+    let snapped = false;
+    // 1. Try to snap to neighbor's actual position
+    for (const dir of [
+      { di: -1, dj: 0 },
+      { di: 1, dj: 0 },
+      { di: 0, dj: -1 },
+      { di: 0, dj: 1 },
+    ]) {
+      const ni = i + dir.di;
+      const nj = j + dir.dj;
+      if (ni < 0 || ni >= this.numPiecesX || nj < 0 || nj >= this.numPiecesY)
+        continue;
+      const neighbor = this.pieces.find(
+        (p) => p.userData.correctI === ni && p.userData.correctJ === nj
+      );
+      if (!neighbor || !neighbor.userData.isSnapped) continue;
+      // Use neighbor's actual position for snapping
+      const neighborPos = neighbor.position;
+      // Calculate where this piece should be relative to neighbor
+      const gridPos = this.getGridPosition(i, j);
+      const expectedPos = new THREE.Vector3(
+        neighborPos.x + dir.di * this.pieceSize,
+        neighborPos.y + dir.dj * this.pieceSize,
+        0
+      );
+      const dx = piece.position.x - expectedPos.x;
+      const dy = piece.position.y - expectedPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      let rot = piece.rotation.z % (2 * Math.PI);
+      if (rot < 0) rot += 2 * Math.PI;
+      let snappedAngle = snapAngles.reduce((prev, curr) =>
+        Math.abs(rot - curr) < Math.abs(rot - prev) ? curr : prev
+      );
+      const rotDiff = Math.abs(rot - snappedAngle);
+      if (dist < this.SNAP_DISTANCE && rotDiff < SNAP_ROTATION) {
+        piece.position.set(expectedPos.x, expectedPos.y, 0);
+        piece.rotation.z = snappedAngle;
+        piece.userData.isSnapped = true;
+        snapped = true;
+        break;
+      }
+    }
+    // 2. If not snapped to neighbor, try grid snap (centered)
+    if (!snapped) {
+      const gridPos = this.getGridPosition(i, j);
+      const dx = piece.position.x - gridPos.x;
+      const dy = piece.position.y - gridPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      let rot = piece.rotation.z % (2 * Math.PI);
+      if (rot < 0) rot += 2 * Math.PI;
+      let snappedAngle = snapAngles.reduce((prev, curr) =>
+        Math.abs(rot - curr) < Math.abs(rot - prev) ? curr : prev
+      );
+      const rotDiff = Math.abs(rot - snappedAngle);
+      if (dist < this.SNAP_DISTANCE && rotDiff < SNAP_ROTATION) {
+        piece.position.set(gridPos.x, gridPos.y, 0);
+        piece.rotation.z = snappedAngle;
+        piece.userData.isSnapped = true;
+        snapped = true;
+      }
+    }
+    return snapped;
+  }
+
   enableDragging() {
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
-    let selectedPiece = null;
+    let draggedPiece = null;
+    let isDragging = false;
     let offset = new THREE.Vector3();
     const camera = this.scene.userData.camera;
     const controls = this.scene.userData.controls;
     let isCameraDrag = false;
     let lastPointerX = 0;
     let isRotating = false;
-
-    const checkCollision = (piece, newPos) => {
-      piece.updateMatrixWorld();
-      const bbox = new THREE.Box3().setFromObject(piece);
-      const delta = new THREE.Vector3(
-        newPos.x - piece.position.x,
-        newPos.y - piece.position.y,
-        newPos.z - piece.position.z
-      );
-      bbox.translate(delta);
-      for (const other of this.pieces) {
-        if (other === piece || other.userData.isSnapped) continue;
-        other.updateMatrixWorld();
-        const otherBox = new THREE.Box3().setFromObject(other);
-        if (bbox.intersectsBox(otherBox)) return true;
-      }
-      return false;
-    };
+    let justDropped = false;
 
     const onPointerDown = (event) => {
-      // Alt/Option for camera drag
+      if (justDropped) {
+        justDropped = false;
+        return;
+      }
       if (event.altKey) {
         isCameraDrag = true;
         if (controls) controls.enabled = true;
-        selectedPiece = null;
+        draggedPiece = null;
+        isDragging = false;
         return;
       }
       isCameraDrag = false;
@@ -425,46 +597,10 @@ class PuzzleScene {
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(this.pieces);
       if (intersects.length > 0) {
-        selectedPiece = intersects[0].object;
-        // Only group truly connected pieces (adjacent and snapped)
-        const group = [selectedPiece];
-        if (selectedPiece.userData.isSnapped) {
-          const i = selectedPiece.userData.correctI;
-          const j = selectedPiece.userData.correctJ;
-          const neighbors = [
-            { di: -1, dj: 0 },
-            { di: 1, dj: 0 },
-            { di: 0, dj: -1 },
-            { di: 0, dj: 1 },
-          ];
-          for (const n of neighbors) {
-            const ni = i + n.di;
-            const nj = j + n.dj;
-            if (
-              ni < 0 ||
-              ni >= this.board.numPiecesX ||
-              nj < 0 ||
-              nj >= this.board.numPiecesY
-            )
-              continue;
-            const neighbor = this.pieces.find(
-              (p) =>
-                p.userData.correctI === ni &&
-                p.userData.correctJ === nj &&
-                p.userData.isSnapped
-            );
-            if (neighbor) group.push(neighbor);
-          }
-        }
-        selectedPiece.userData.snappedGroup = group;
-        // Track all snapped pieces as a group if selectedPiece is snapped
-        if (selectedPiece.userData.isSnapped) {
-          selectedPiece.userData.snappedGroup = this.pieces.filter(
-            (p) => p.userData.isSnapped
-          );
-        } else {
-          selectedPiece.userData.snappedGroup = [selectedPiece];
-        }
+        const selectedPiece = intersects[0].object;
+        if (selectedPiece.userData.isSnapped) return;
+        draggedPiece = selectedPiece;
+        isDragging = true;
         const planeZ = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
         const intersection = new THREE.Vector3();
         raycaster.ray.intersectPlane(planeZ, intersection);
@@ -475,92 +611,16 @@ class PuzzleScene {
       }
     };
 
-    const checkAndSnapPiece = (piece) => {
-      const pieceSize = this.board.pieceSize;
-      const i =
-        piece.userData.correctI !== undefined
-          ? piece.userData.correctI
-          : piece.i;
-      const j =
-        piece.userData.correctJ !== undefined
-          ? piece.userData.correctJ
-          : piece.j;
-      const gridX = (i - this.board.numPiecesX / 2 + 0.5) * pieceSize;
-      const gridY = (j - this.board.numPiecesY / 2 + 0.5) * pieceSize;
-      const dx = piece.position.x - gridX;
-      const dy = piece.position.y - gridY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      let rot = piece.rotation.z % (2 * Math.PI);
-      if (rot < 0) rot += 2 * Math.PI;
-      const snapAngles = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
-      let snappedAngle = snapAngles.reduce((prev, curr) =>
-        Math.abs(rot - curr) < Math.abs(rot - prev) ? curr : prev
-      );
-      const rotDiff = Math.abs(rot - snappedAngle);
-      if (dist < SNAP_DISTANCE && rotDiff < SNAP_ROTATION) {
-        piece.position.x = gridX;
-        piece.position.y = gridY;
-        piece.position.z = 0;
-        piece.rotation.z = snappedAngle;
-        piece.userData.isSnapped = true;
-        // Snap correct neighbors if they are close
-        const neighbors = [
-          { di: -1, dj: 0 }, // left
-          { di: 1, dj: 0 }, // right
-          { di: 0, dj: -1 }, // top
-          { di: 0, dj: 1 }, // bottom
-        ];
-        for (const n of neighbors) {
-          const ni = i + n.di;
-          const nj = j + n.dj;
-          if (
-            ni < 0 ||
-            ni >= this.board.numPiecesX ||
-            nj < 0 ||
-            nj >= this.board.numPiecesY
-          )
-            continue;
-          const neighbor = this.pieces.find(
-            (p) => p.userData.correctI === ni && p.userData.correctJ === nj
-          );
-          if (!neighbor || neighbor.userData.isSnapped) continue;
-          const nGridX = (ni - this.board.numPiecesX / 2 + 0.5) * pieceSize;
-          const nGridY = (nj - this.board.numPiecesY / 2 + 0.5) * pieceSize;
-          const ndx = neighbor.position.x - nGridX;
-          const ndy = neighbor.position.y - nGridY;
-          const ndist = Math.sqrt(ndx * ndx + ndy * ndy);
-          let nrot = neighbor.rotation.z % (2 * Math.PI);
-          if (nrot < 0) nrot += 2 * Math.PI;
-          let nSnappedAngle = snapAngles.reduce((prev, curr) =>
-            Math.abs(nrot - curr) < Math.abs(nrot - prev) ? curr : prev
-          );
-          const nRotDiff = Math.abs(nrot - nSnappedAngle);
-          if (ndist < SNAP_DISTANCE && nRotDiff < SNAP_ROTATION) {
-            neighbor.position.x = nGridX;
-            neighbor.position.y = nGridY;
-            neighbor.position.z = 0;
-            neighbor.rotation.z = nSnappedAngle;
-            neighbor.userData.isSnapped = true;
-          }
-        }
-      }
-    };
-
     const onPointerMove = (event) => {
       if (isCameraDrag) return;
-      if (!selectedPiece) return;
-      const group = selectedPiece.userData.snappedGroup || [selectedPiece];
-      // Only rotate if Shift is pressed, do not move
+      if (!isDragging || !draggedPiece) return;
       if (event.shiftKey) {
         const dx = event.clientX - lastPointerX;
-        for (const piece of group) {
-          piece.rotation.z += dx * 0.01;
-          checkAndSnapPiece(piece);
-        }
+        draggedPiece.rotation.z += dx * 0.01;
+        this.snapPiece(draggedPiece);
         lastPointerX = event.clientX;
         return;
       }
-      // Only move if Shift is not pressed
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
@@ -570,31 +630,9 @@ class PuzzleScene {
       const newPos = {
         x: intersection.x + offset.x,
         y: intersection.y + offset.y,
-        z: 0,
+        z: 0.5,
       };
-      // Calculate movement delta
-      const dx = newPos.x - selectedPiece.position.x;
-      const dy = newPos.y - selectedPiece.position.y;
-      for (const piece of group) {
-        piece.position.x += dx;
-        piece.position.y += dy;
-        piece.position.z = 0.5;
-        checkAndSnapPiece(piece);
-      }
-      for (const other of this.pieces) {
-        // Only affect unsnapped pieces
-        if (other === selectedPiece || other.userData.isSnapped) continue;
-        if (selectedPiece.userData.isSnapped) continue;
-        const odx = other.position.x - selectedPiece.position.x;
-        const ody = other.position.y - selectedPiece.position.y;
-        const dist = Math.sqrt(odx * odx + ody * ody);
-        if (dist < 1.1) {
-          const force = (1.1 - dist) * 0.18;
-          const angle = Math.atan2(ody, odx);
-          other.position.x += Math.cos(angle) * force;
-          other.position.y += Math.sin(angle) * force;
-        }
-      }
+      draggedPiece.position.set(newPos.x, newPos.y, newPos.z);
     };
 
     const onPointerUp = (event) => {
@@ -602,126 +640,77 @@ class PuzzleScene {
         isCameraDrag = false;
         return;
       }
-      if (selectedPiece) {
-        // Use the piece's correct grid cell for snapping
-        const pieceSize = this.board.pieceSize * 1.1;
-        const i =
-          selectedPiece.userData.correctI !== undefined
-            ? selectedPiece.userData.correctI
-            : selectedPiece.i;
-        const j =
-          selectedPiece.userData.correctJ !== undefined
-            ? selectedPiece.userData.correctJ
-            : selectedPiece.j;
-        const gridX = (i - this.board.numPiecesX / 2) * pieceSize;
-        const gridY = (j - this.board.numPiecesY / 2) * pieceSize;
-        const dx = selectedPiece.position.x - gridX;
-        const dy = selectedPiece.position.y - gridY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        let rot = selectedPiece.rotation.z % (2 * Math.PI);
-        if (rot < 0) rot += 2 * Math.PI;
-        const snapAngles = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
-        let snappedAngle = snapAngles.reduce((prev, curr) =>
-          Math.abs(rot - curr) < Math.abs(rot - prev) ? curr : prev
-        );
-        const rotDiff = Math.abs(rot - snappedAngle);
-        // Snap only if close to correct cell and orientation
-        if (dist < SNAP_DISTANCE && rotDiff < SNAP_ROTATION) {
-          selectedPiece.position.x = gridX;
-          selectedPiece.position.y = gridY;
-          selectedPiece.position.z = 0;
-          selectedPiece.rotation.z = snappedAngle;
-          selectedPiece.userData.isSnapped = true;
-        } else {
-          // Clamp to table bounds (now much larger)
+      if (isDragging && draggedPiece) {
+        const snapped = this.snapPiece(draggedPiece);
+        if (!snapped) {
+          // Clamp to table bounds
           const halfW = this.tableWidth / 2 - 0.5;
           const halfH = this.tableHeight / 2 - 0.5;
-          selectedPiece.position.x = Math.max(
+          draggedPiece.position.x = Math.max(
             -halfW,
-            Math.min(halfW, selectedPiece.position.x)
+            Math.min(halfW, draggedPiece.position.x)
           );
-          selectedPiece.position.y = Math.max(
+          draggedPiece.position.y = Math.max(
             -halfH,
-            Math.min(halfH, selectedPiece.position.y)
+            Math.min(halfH, draggedPiece.position.y)
           );
-          selectedPiece.position.z = 0;
-          selectedPiece.rotation.z = snappedAngle;
+          draggedPiece.position.z = 0;
         }
-        // Try to snap to neighbors if both are correct
-        for (const other of this.pieces) {
-          if (other === selectedPiece || other.userData.isSnapped) continue;
-          const otherCorrect = other.userData.correctPosition;
-          const otherPos = other.position.clone();
-          const otherDist = otherPos.distanceTo(
-            new THREE.Vector3(otherCorrect.x, otherCorrect.y, otherCorrect.z)
-          );
-          let otherRot = other.rotation.z % (2 * Math.PI);
-          if (otherRot < 0) otherRot += 2 * Math.PI;
-          let otherSnappedAngle = snapAngles.reduce((prev, curr) =>
-            Math.abs(otherRot - curr) < Math.abs(otherRot - prev) ? curr : prev
-          );
-          const otherRotDiff = Math.abs(otherRot - otherSnappedAngle);
-          // If both are close to their correct positions and rotations, snap both
-          if (
-            dist < SNAP_DISTANCE &&
-            rotDiff < SNAP_ROTATION &&
-            otherDist < SNAP_DISTANCE &&
-            otherRotDiff < SNAP_ROTATION &&
-            currentPos.distanceTo(otherPos) < SNAP_DISTANCE * 1.2
-          ) {
-            selectedPiece.position.copy(correctPos);
-            selectedPiece.rotation.z = snappedAngle;
-            selectedPiece.userData.isSnapped = true;
-            other.position.copy(
-              new THREE.Vector3(otherCorrect.x, otherCorrect.y, otherCorrect.z)
-            );
-            other.rotation.z = otherSnappedAngle;
-            other.userData.isSnapped = true;
-          }
-        }
-        selectedPiece = null;
+        draggedPiece = null;
+        isDragging = false;
         isRotating = false;
+        justDropped = true;
         if (controls) controls.enabled = true;
       }
     };
 
-    const onWheel = (event) => {
-      if (selectedPiece) {
-        selectedPiece.rotation.z += event.deltaY * 0.01;
-      }
-    };
-
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-    window.addEventListener("wheel", onWheel);
+    // Remove dead wheel handler and collision check
+    // Store listeners for later removal
+    const pointerDown = (event) => onPointerDown(event);
+    const pointerMove = (event) => onPointerMove(event);
+    const pointerUp = (event) => onPointerUp(event);
+    window.addEventListener("pointerdown", pointerDown);
+    window.addEventListener("pointermove", pointerMove);
+    window.addEventListener("pointerup", pointerUp);
+    this.listeners = [
+      ["pointerdown", pointerDown],
+      ["pointermove", pointerMove],
+      ["pointerup", pointerUp],
+    ];
   }
 }
 
-export function createPuzzle(scene) {
-  // Add better lighting
-  scene.add(new THREE.AmbientLight(0xffffff, 0.5)); // Soft fill
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-  dirLight.position.set(0, -5, 8);
-  dirLight.castShadow = true;
-  dirLight.shadow.mapSize.width = 1024;
-  dirLight.shadow.mapSize.height = 1024;
-  scene.add(dirLight);
-  const spotLight = new THREE.SpotLight(0xfff8e1, 0.4, 20, Math.PI / 6, 0.3, 1);
-  spotLight.position.set(5, 5, 8);
-  spotLight.castShadow = true;
-  scene.add(spotLight);
+export function createPuzzle(scene, numPieces = 4, boardSize = 4, callback) {
+  // Add better lighting (only once)
+  if (!scene.userData.lightingAdded) {
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5)); // Soft fill
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(0, -5, 8);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 1024;
+    dirLight.shadow.mapSize.height = 1024;
+    scene.add(dirLight);
+    const spotLight = new THREE.SpotLight(
+      0xfff8e1,
+      0.4,
+      20,
+      Math.PI / 6,
+      0.3,
+      1
+    );
+    spotLight.position.set(5, 5, 8);
+    spotLight.castShadow = true;
+    scene.add(spotLight);
+    scene.userData.lightingAdded = true;
+  }
 
-  const pieceSize = 1;
-  const numPiecesX = 4;
-  const numPiecesY = 4;
+  // Calculate piece size so board stays fixed
+  const pieceSize = boardSize / numPieces;
+  const numPiecesX = numPieces;
+  const numPiecesY = numPieces;
   if (scene.userData.camera) {
     const camera = scene.userData.camera;
-    camera.position.set(
-      0,
-      -numPiecesY * pieceSize * 2.5,
-      numPiecesY * pieceSize * 3.5
-    );
+    camera.position.set(0, -boardSize * 2.5, boardSize * 3.5);
     camera.lookAt(0, 0, 0);
     camera.rotation.x = Math.PI / 6;
     if (scene.userData.controls) {
@@ -731,118 +720,60 @@ export function createPuzzle(scene) {
   }
   const textureLoader = new THREE.TextureLoader();
   textureLoader.load(
-    "/puzzle.jpg", // Vite serves from public/
+    "/puzzle.jpg",
     (texture) => {
       texture.needsUpdate = true;
-      new PuzzleScene(scene, pieceSize, numPiecesX, numPiecesY, texture);
+      new PuzzleScene(
+        scene,
+        pieceSize,
+        numPiecesX,
+        numPiecesY,
+        texture,
+        (group, listeners) => {
+          group.userData.isPuzzle = true;
+          if (callback) callback(group, listeners);
+        }
+      );
     },
     undefined,
     () => {
-      // Fallback: show colored pieces if texture fails
-      new PuzzleScene(scene, pieceSize, numPiecesX, numPiecesY, null);
+      new PuzzleScene(
+        scene,
+        pieceSize,
+        numPiecesX,
+        numPiecesY,
+        null,
+        (group, listeners) => {
+          group.userData.isPuzzle = true;
+          if (callback) callback(group, listeners);
+        }
+      );
     }
   );
 }
 
-function addConnector(shape, half, side, connectorType, connectorId, profile) {
-  const c = half * 0.4; // connector size
-  // Mirror profile for 'in' connectors so cutout matches protrusion
-  let p = profile || [0, 0, 0, 0];
-  if (connectorType === "in") {
-    p = [...p].reverse();
-  }
-  switch (side) {
-    case 1: // Top
-      shape.lineTo(-c, -half);
-      if (connectorType === "out") {
-        shape.bezierCurveTo(
-          -c + p[0] * c,
-          -half - c - p[1] * c,
-          c + p[2] * c,
-          -half - c - p[3] * c,
-          c,
-          -half
-        );
-      } else {
-        shape.bezierCurveTo(
-          -c + p[0] * c,
-          -half + c + p[1] * c,
-          c + p[2] * c,
-          -half + c + p[3] * c,
-          c,
-          -half
-        );
+export function disposePuzzle(scene, puzzleGroup, listeners) {
+  if (!puzzleGroup) return;
+  scene.remove(puzzleGroup);
+  puzzleGroup.traverse((obj) => {
+    if (obj.isMesh) {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach((mat) => mat.dispose && mat.dispose());
+        } else {
+          obj.material.dispose && obj.material.dispose();
+        }
       }
-      shape.lineTo(half, -half);
-      break;
-    case 2: // Right
-      shape.lineTo(half, -c);
-      if (connectorType === "out") {
-        shape.bezierCurveTo(
-          half + c + p[0] * c,
-          -c + p[1] * c,
-          half + c + p[2] * c,
-          c + p[3] * c,
-          half,
-          c
-        );
-      } else {
-        shape.bezierCurveTo(
-          half - c - p[0] * c,
-          -c + p[1] * c,
-          half - c - p[2] * c,
-          c + p[3] * c,
-          half,
-          c
-        );
+      if (obj.material && obj.material.map) {
+        obj.material.map.dispose && obj.material.map.dispose();
       }
-      shape.lineTo(half, half);
-      break;
-    case 3: // Bottom
-      shape.lineTo(c, half);
-      if (connectorType === "out") {
-        shape.bezierCurveTo(
-          c + p[0] * c,
-          half + c + p[1] * c,
-          -c + p[2] * c,
-          half + c + p[3] * c,
-          -c,
-          half
-        );
-      } else {
-        shape.bezierCurveTo(
-          c + p[0] * c,
-          half - c - p[1] * c,
-          -c + p[2] * c,
-          half - c - p[3] * c,
-          -c,
-          half
-        );
-      }
-      shape.lineTo(-half, half);
-      break;
-    case 4: // Left
-      shape.lineTo(-half, c);
-      if (connectorType === "out") {
-        shape.bezierCurveTo(
-          -half - c - p[0] * c,
-          c + p[1] * c,
-          -half - c - p[2] * c,
-          -c + p[3] * c,
-          -half,
-          -c
-        );
-      } else {
-        shape.bezierCurveTo(
-          -half + c + p[0] * c,
-          c + p[1] * c,
-          -half + c + p[2] * c,
-          -c + p[3] * c,
-          -half,
-          -c
-        );
-      }
-      shape.lineTo(-half, -half);
-      break;
+    }
+  });
+  // Remove listeners
+  if (listeners) {
+    listeners.forEach(([type, fn]) => {
+      window.removeEventListener(type, fn);
+    });
   }
 }
