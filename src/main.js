@@ -1,0 +1,59 @@
+import "./style.css";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { createPuzzle } from "./puzzle.js";
+
+// Scene
+const scene = new THREE.Scene();
+
+// Camera
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
+camera.position.z = 5;
+
+// Renderer
+const renderer = new THREE.WebGLRenderer({
+  canvas: document.querySelector("#bg"),
+});
+
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+
+// Lights
+const pointLight = new THREE.PointLight(0xffffff);
+pointLight.position.set(5, 5, 5);
+
+const ambientLight = new THREE.AmbientLight(0xffffff);
+scene.add(pointLight, ambientLight);
+
+// Controls
+const controls = new OrbitControls(camera, renderer.domElement);
+
+// Pass camera and controls to scene for drag logic
+scene.userData.camera = camera;
+scene.userData.controls = controls;
+
+// Create Puzzle
+createPuzzle(scene);
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  controls.update();
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+window.addEventListener("resize", onWindowResize, false);
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
