@@ -15,16 +15,68 @@
         padding: 10px;
         border-radius: 5px;
       }
+      #roomModal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+      }
+      #roomModalContent {
+        background: #fff;
+        padding: 2em;
+        border-radius: 8px;
+        box-shadow: 0 2px 16px rgba(0, 0, 0, 0.2);
+        min-width: 300px;
+        text-align: center;
+      }
+      #roomModal input[type="text"] {
+        width: 80%;
+        margin-bottom: 1em;
+        padding: 0.5em;
+      }
+      #roomModal button {
+        margin: 0.5em;
+        padding: 0.5em 1.5em;
+      }
+      #roomError {
+        color: red;
+        margin-bottom: 1em;
+      }
     </style>
   </head>
   <body>
     <canvas id="bg"></canvas>
-    <div id="controls">
+    <div id="controls" style="display: none">
       <label id="sliderLabel" for="pieceSlider">Pieces per side:</label>
       <input type="range" id="pieceSlider" min="2" max="10" value="6" />
       <span id="pieceCount">6</span>
       <input type="file" id="customImageInput" accept="image/*" />
       <label for="customImageInput">Choose custom puzzle image</label>
+    </div>
+    <div id="roomModal">
+      <div id="roomModalContent">
+        <div id="roomError"></div>
+        <input
+          id="roomNameInput"
+          type="text"
+          placeholder="Room name"
+          maxlength="32"
+        />
+        <br />
+        <button id="createRoomBtn">Create Room</button>
+        <button id="joinRoomBtn">Join Room</button>
+        <button id="soloBtn">Play Solo</button>
+        <br />
+        <label for="modalPieceSlider">Pieces per side:</label>
+        <input type="range" id="modalPieceSlider" min="2" max="10" value="6" />
+        <span id="modalPieceCount">6</span>
+      </div>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>

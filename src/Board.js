@@ -2,13 +2,13 @@ import * as THREE from "three";
 import { Piece, Position } from "./Piece";
 
 export class Board {
-  constructor(texture, gridSize, scene) {
+  constructor(texture, gridSize, scene, piecesState = null) {
     this.texture = texture;
     this.gridSize = gridSize;
     this.group = new THREE.Group();
     scene.add(this.group); // Add group to scene
     const pieceSizePercent = 1.0 / gridSize;
-    this.pieces = Array.from(gridSize * gridSize);
+    this.pieces = Array.from({ length: gridSize * gridSize });
     const material = new THREE.MeshStandardMaterial({
       map: texture || null,
       color: texture
@@ -17,9 +17,13 @@ export class Board {
       metalness: 0.3,
       roughness: 0.6,
     });
+    // Create pieces with correct IDs and positions
     for (var i = 0; i < gridSize; i++) {
       for (var j = 0; j < gridSize; j++) {
-        this.pieces[i * gridSize + j] = new Piece(i, j, pieceSizePercent);
+        const id = `${i}_${j}`;
+        const piece = new Piece(i, j, pieceSizePercent);
+        piece.id = id;
+        this.pieces[i * gridSize + j] = piece;
       }
     }
     // Set connectors for all edges, including outer rows/columns
@@ -41,53 +45,64 @@ export class Board {
         current.createMesh(scene, material, gridSize);
       }
     }
-    // Place pieces at random positions without overlap
-    const placedBoxes = [];
-    for (var i = 0; i < gridSize; i++) {
-      for (var j = 0; j < gridSize; j++) {
-        const current = this.pieces[i * gridSize + j];
-        const pieceSize = 1.0 / gridSize;
-        let placed = false;
-        let attempts = 0;
-        const maxAttempts = 200;
-        let randX, randY;
-        while (!placed && attempts < maxAttempts) {
-          randX = Math.random() * 2.4 - 1.2;
-          randY = Math.random() * 2.4 - 1.2;
-          let box = {
-            minX: randX - pieceSize / 2,
-            maxX: randX + pieceSize / 2,
-            minY: randY - pieceSize / 2,
-            maxY: randY + pieceSize / 2,
-          };
-          let collision = false;
-          for (const placed of placedBoxes) {
-            if (
-              box.maxX > placed.minX &&
-              box.minX < placed.maxX &&
-              box.maxY > placed.minY &&
-              box.minY < placed.maxY
-            ) {
-              collision = true;
-              break;
-            }
-          }
-          if (!collision) {
-            placed = true;
-            current.setPosition(new Position(randX, randY, 0));
-            placedBoxes.push(box);
-          }
-          attempts++;
+    if (piecesState) {
+      // Set piece positions from state
+      for (const key in piecesState) {
+        const piece = this.pieces.find((p) => p.id === key);
+        if (piece) {
+          const pos = piecesState[key];
+          piece.setPosition(new Position(pos.x, pos.y, pos.z));
         }
-        if (!placed) {
-          // Fallback: just place at random (may overlap, but very unlikely)
-          current.setPosition(new Position(randX, randY, 0));
-          placedBoxes.push({
-            minX: randX - pieceSize / 2,
-            maxX: randX + pieceSize / 2,
-            minY: randY - pieceSize / 2,
-            maxY: randY + pieceSize / 2,
-          });
+      }
+    } else {
+      // Place pieces at random positions without overlap
+      const placedBoxes = [];
+      for (var i = 0; i < gridSize; i++) {
+        for (var j = 0; j < gridSize; j++) {
+          const current = this.pieces[i * gridSize + j];
+          const pieceSize = 1.0 / gridSize;
+          let placed = false;
+          let attempts = 0;
+          const maxAttempts = 200;
+          let randX, randY;
+          while (!placed && attempts < maxAttempts) {
+            randX = Math.random() * 2.4 - 1.2;
+            randY = Math.random() * 2.4 - 1.2;
+            let box = {
+              minX: randX - pieceSize / 2,
+              maxX: randX + pieceSize / 2,
+              minY: randY - pieceSize / 2,
+              maxY: randY + pieceSize / 2,
+            };
+            let collision = false;
+            for (const placed of placedBoxes) {
+              if (
+                box.maxX > placed.minX &&
+                box.minX < placed.maxX &&
+                box.maxY > placed.minY &&
+                box.minY < placed.maxY
+              ) {
+                collision = true;
+                break;
+              }
+            }
+            if (!collision) {
+              placed = true;
+              current.setPosition(new Position(randX, randY, 0));
+              placedBoxes.push(box);
+            }
+            attempts++;
+          }
+          if (!placed) {
+            // Fallback: just place at random (may overlap, but very unlikely)
+            current.setPosition(new Position(randX, randY, 0));
+            placedBoxes.push({
+              minX: randX - pieceSize / 2,
+              maxX: randX + pieceSize / 2,
+              minY: randY - pieceSize / 2,
+              maxY: randY + pieceSize / 2,
+            });
+          }
         }
       }
     }
@@ -117,7 +132,7 @@ export class Board {
       });
       const puzzleGeometry = new THREE.BoxGeometry(1, 1, 0.01);
       const puzzleImage = new THREE.Mesh(puzzleGeometry, puzzleMaterial);
-      puzzleImage.position.set(0, 0, tableThickness / 2 + 0.005);
+      puzzleImage.position.set(0, 0, tableThickness / 2 - 0.002);
       puzzleImage.rotation.z = 0;
       puzzleImage.receiveShadow = false;
       this.group.add(puzzleImage); // Add to group, not scene
@@ -143,6 +158,11 @@ export class Board {
         (p) => p.mesh === intersects[0].object
       ));
       if (piece != null) {
+        // Prevent pickup if piece is being dragged by another user
+        if (piece.dragging) {
+          if (controls) controls.enabled = true;
+          return;
+        }
         this._dragging = true;
         const intersectPoint = intersects[0].point;
         this._dragOffset.copy(piece.group.position).sub(intersectPoint);

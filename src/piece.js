@@ -89,15 +89,15 @@ export class Piece {
     // --- BASE MESH (cardboard/paper sides & bottom) ---
     const baseExtrudeSettings = {
       steps: 2,
-      depth: 0.03,
+      depth: this.size * 0.08,
       bevelEnabled: false,
     };
     const baseGeometry = new THREE.ExtrudeGeometry(shape, baseExtrudeSettings);
     // Cardboard/paper material for all faces
     const paperMaterial = new THREE.MeshStandardMaterial({
       color: 0xc2b280,
-      roughness: 0.8,
-      metalness: 0.1,
+      roughness: 0.6,
+      metalness: 0.2,
     });
     const baseMesh = new THREE.Mesh(baseGeometry, paperMaterial);
     baseMesh.castShadow = true;
@@ -107,12 +107,12 @@ export class Piece {
     // Slightly increase depth and offset to fully cover base
     const topExtrudeSettings = {
       steps: 2,
-      depth: 0.002, // slightly more than base
+      depth: this.size * 0.004, // slightly more than base
       bevelEnabled: true,
-      bevelThickness: 0.011, // slightly more than before
-      bevelSize: 0.011,
-      bevelOffset: -0.011,
-      bevelSegments: 8,
+      bevelThickness: this.size * 0.05, // slightly more than before
+      bevelSize: this.size * 0.05,
+      bevelOffset: this.size * -0.05,
+      bevelSegments: 12,
     };
     const topGeometry = new THREE.ExtrudeGeometry(shape, topExtrudeSettings);
     // Calculate UV mapping for the top mesh
@@ -129,7 +129,7 @@ export class Piece {
     topMesh.castShadow = true;
     topMesh.receiveShadow = false;
     // Position the top mesh to fully cover the base
-    topMesh.position.z = 0.03;
+    topMesh.position.z = this.size * 0.08;
 
     // --- GROUPING ---
 
