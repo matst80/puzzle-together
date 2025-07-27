@@ -22,7 +22,7 @@ const httpServer = createServer((req, res) => {
 
 const DEFAULT_GRID_SIZE = 4;
 
-// Room state: { [roomId]: { pieces: Map<pieceId, {x, y, z, dragging}>, clients: Set<ws>, users: Map<ws, {username, score}> } }
+// Room state: { [roomId]: { pieces: Map<pieceId, {x, y, z, dragging}>, clients: Set<ws>, users: Map<ws, {username, score}>, correctPieces: Set<pieceId> } }
 const rooms = {};
 
 function generateInitialPositions(gridSize = DEFAULT_GRID_SIZE) {
@@ -190,6 +190,8 @@ wss.on("connection", function connection(ws) {
         );
         return;
       }
+      // Ensure correctPieces set exists
+      if (!room.correctPieces) room.correctPieces = new Set();
       // Update state
       room.pieces.set(msg.pieceId, {
         x: msg.x,
@@ -197,6 +199,14 @@ wss.on("connection", function connection(ws) {
         z: msg.z,
         dragging: msg.type === "piece-drag",
       });
+      // If the move is a correct placement, increment score only if not already correct
+      if (msg.correct && room.users.has(ws)) {
+        if (!room.correctPieces.has(msg.pieceId)) {
+          room.users.get(ws).score += 1;
+          room.correctPieces.add(msg.pieceId);
+          broadcastUserList(msg.roomId);
+        }
+      }
       // Broadcast to others in room
       broadcastToRoom(msg.roomId, msg, ws);
       // (Score logic can be added here)

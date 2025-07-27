@@ -28,25 +28,71 @@
         z-index: 2000;
       }
       #roomModalContent {
-        background: #fff;
-        padding: 2em;
-        border-radius: 8px;
-        box-shadow: 0 2px 16px rgba(0, 0, 0, 0.2);
-        min-width: 300px;
+        background: linear-gradient(135deg, #fff 80%, #e0e7ff 100%);
+        padding: 2.5em 2em 2em 2em;
+        border-radius: 12px;
+        box-shadow: 0 4px 32px rgba(0, 0, 0, 0.25);
+        min-width: 340px;
         text-align: center;
+        font-size: 1.15em;
+        color: #222;
       }
       #roomModal input[type="text"] {
-        width: 80%;
-        margin-bottom: 1em;
-        padding: 0.5em;
+        width: 85%;
+        margin-bottom: 1.2em;
+        padding: 0.7em;
+        font-size: 1em;
+        border: 1.5px solid #bfcfff;
+        border-radius: 5px;
+        background: #f8faff;
+        color: #222;
+        font-weight: 500;
+      }
+      #roomModal input[type="text"]::placeholder {
+        color: #7a7a9a;
+        opacity: 1;
+        font-weight: 400;
+      }
+      #roomModal label,
+      #roomModalContent label {
+        color: #3b3b6d;
+        font-weight: 600;
+        margin-bottom: 0.5em;
+        display: block;
+        font-size: 1em;
       }
       #roomModal button {
-        margin: 0.5em;
-        padding: 0.5em 1.5em;
+        margin: 0.7em 0.5em 0.7em 0.5em;
+        padding: 0.6em 1.7em;
+        font-size: 1em;
+        font-weight: 600;
+        background: linear-gradient(90deg, #6c63ff 60%, #48b1f3 100%);
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        box-shadow: 0 2px 8px rgba(76, 81, 255, 0.08);
+        cursor: pointer;
+        transition: background 0.2s, box-shadow 0.2s;
+      }
+      #roomModal button:hover {
+        background: linear-gradient(90deg, #48b1f3 60%, #6c63ff 100%);
+        box-shadow: 0 4px 16px rgba(76, 81, 255, 0.15);
       }
       #roomError {
-        color: red;
-        margin-bottom: 1em;
+        color: #e53935;
+        margin-bottom: 1.2em;
+        font-size: 1.05em;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+      #roomList {
+        margin: 1em 0 1.5em 0;
+        font-size: 1em;
+        color: #333;
+      }
+      #modalPieceSlider,
+      #modalPieceCount {
+        margin-top: 0.7em;
       }
     </style>
   </head>
@@ -79,6 +125,7 @@
         <br />
         <button id="createRoomBtn">Create Room</button>
         <button id="joinRoomBtn">Join Room</button>
+        <div id="roomList"></div>
         <button id="soloBtn">Play Solo</button>
         <br />
         <label for="modalPieceSlider">Pieces per side:</label>

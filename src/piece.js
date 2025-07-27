@@ -241,13 +241,15 @@ export class Piece {
   }
   // Animate pickup (lift and scale up)
   pickup() {
-    console.log(
-      "Pickup animation started for piece at:",
-      this.gridX,
-      this.gridY,
-      this._dragging
-    );
     if (!this._dragging) {
+      if (
+        this.isCloseToCorrectBoardPosition(
+          this.group.position.x,
+          this.group.position.y
+        )
+      ) {
+        return;
+      }
       this._dragging = true;
       // Move all connected pieces up
       const group = Array.from(this.collectConnectedGroupByProperty());
@@ -375,6 +377,7 @@ export class Piece {
             y: correctY,
             z: this._dragPlaneZ,
             id: piece.id,
+            correct: true, // Indicate correct placement
           });
           piece.animController.animateTo({
             position: new THREE.Vector3(

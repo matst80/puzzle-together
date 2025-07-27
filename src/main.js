@@ -236,9 +236,7 @@ document.addEventListener("DOMContentLoaded", () => {
   hideControls();
   showRoomModal();
 
-  const roomListDiv = document.createElement("div");
-  roomListDiv.id = "roomListDiv";
-  roomModalContent.insertBefore(roomListDiv, roomNameInput.parentNode);
+  const roomListDiv = document.getElementById("roomList");
 
   async function fetchRoomList() {
     try {
@@ -316,6 +314,49 @@ function setupWebSocketAndRoom(roomId, gridSize, isCreate, username) {
 }
 
 // --- Multiplayer WebSocket setup (overrides old setupWebSocket) ---
+let userListDiv = null;
+function showUserList(users) {
+  if (!userListDiv) {
+    userListDiv = document.createElement("div");
+    userListDiv.id = "userListDiv";
+    userListDiv.style.position = "absolute";
+    userListDiv.style.top = "20px";
+    userListDiv.style.right = "20px";
+    userListDiv.style.background = "#fff";
+    userListDiv.style.padding = "16px 18px 12px 18px";
+    userListDiv.style.borderRadius = "12px";
+    userListDiv.style.zIndex = 2001;
+    userListDiv.style.minWidth = "200px";
+    userListDiv.style.boxShadow = "0 4px 16px rgba(0,0,0,0.18)";
+    userListDiv.style.fontFamily = "system-ui, sans-serif";
+    userListDiv.style.fontSize = "16px";
+    userListDiv.style.border = "1.5px solid #e0e0e0";
+    userListDiv.style.color = "#222";
+    document.body.appendChild(userListDiv);
+  }
+  userListDiv.innerHTML =
+    `<div style='font-weight:600;font-size:18px;margin-bottom:8px;color:#2a2a2a;letter-spacing:0.5px;'>Users in room</div>` +
+    `<ul style='list-style:none;padding:0;margin:0;'>` +
+    users
+      .map(
+        (u, idx) =>
+          `<li style='display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f0f0;${
+            idx === users.length - 1 ? "border-bottom:none;" : ""
+          }'>` +
+          `<span style='font-weight:500;'>${u.username}</span>` +
+          `<span style='background:#f5f5f5;border-radius:6px;padding:2px 10px;font-size:14px;color:#4a4a4a;margin-left:10px;'>` +
+          `Score: <span style='font-weight:700;color:#1976d2;'>${u.score}</span>` +
+          `</span>` +
+          `</li>`
+      )
+      .join("") +
+    `</ul>`;
+  userListDiv.style.display = "";
+}
+function hideUserList() {
+  if (userListDiv) userListDiv.style.display = "none";
+}
+
 function handleWSMessage(data) {
   try {
     const msg = JSON.parse(data);
@@ -327,6 +368,7 @@ function handleWSMessage(data) {
       hideRoomModal();
       hideControls(); // Always hide controls for multiplayer
       boardReady = true;
+      hideUserList(); // Hide before showing new list
       // Set slider to match room
       if (msg.pieces) {
         const pieceCount = Math.sqrt(Object.keys(msg.pieces).length) | 0;
@@ -352,6 +394,7 @@ function handleWSMessage(data) {
       showRoomModal();
       hideControls();
       boardReady = false;
+      hideUserList();
     }
   } catch (e) {
     console.warn("Invalid WS message", data);
@@ -366,7 +409,7 @@ function createBoardWithState(piecesState) {
     gridSize,
     scene,
     piecesState,
-    ({ id, x, y, z }) => {
+    ({ id, x, y, z, correct }) => {
       ws.send(
         JSON.stringify({
           type: "piece-move",
@@ -375,6 +418,7 @@ function createBoardWithState(piecesState) {
           x,
           y,
           z,
+          ...(correct ? { correct: true } : {}),
         })
       );
     }
