@@ -1,11 +1,28 @@
 import { WebSocketServer } from "ws";
 import { createServer } from "http";
 
-const httpServer = createServer();
+const httpServer = createServer((req, res) => {
+  if (req.method === "GET" && req.url === "/rooms") {
+    // List all rooms and users
+    const roomList = Object.entries(rooms).map(([roomId, room]) => ({
+      roomId,
+      users: Array.from(room.users.values()).map((u) => ({
+        username: u.username,
+        score: u.score,
+      })),
+      userCount: room.users.size,
+    }));
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(roomList));
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
 
 const DEFAULT_GRID_SIZE = 4;
 
-// Room state: { [roomId]: { pieces: Map<pieceId, {x, y, z, dragging}>, clients: Set<ws> } }
+// Room state: { [roomId]: { pieces: Map<pieceId, {x, y, z, dragging}>, clients: Set<ws>, users: Map<ws, {username, score}> } }
 const rooms = {};
 
 function generateInitialPositions(gridSize = DEFAULT_GRID_SIZE) {
@@ -79,6 +96,16 @@ const wss = new WebSocketServer({ server: httpServer });
 
 wss.on("connection", function connection(ws) {
   ws.roomId = null;
+  ws.username = null;
+
+  function broadcastUserList(roomId) {
+    if (!rooms[roomId]) return;
+    const users = Array.from(rooms[roomId].users.values()).map((u) => ({
+      username: u.username,
+      score: u.score,
+    }));
+    broadcastToRoom(roomId, { type: "user-list", users });
+  }
 
   ws.on("message", function incoming(message) {
     let msg;
@@ -92,7 +119,8 @@ wss.on("connection", function connection(ws) {
     if (
       msg.type === "create-room" &&
       typeof msg.roomId === "string" &&
-      typeof msg.gridSize === "number"
+      typeof msg.gridSize === "number" &&
+      typeof msg.username === "string"
     ) {
       if (rooms[msg.roomId]) {
         ws.send(
@@ -104,8 +132,10 @@ wss.on("connection", function connection(ws) {
       rooms[msg.roomId] = {
         pieces: generateInitialPositions(msg.gridSize),
         clients: new Set([ws]),
+        users: new Map([[ws, { username: msg.username, score: 0 }]]),
       };
       ws.roomId = msg.roomId;
+      ws.username = msg.username;
       ws.send(
         JSON.stringify({
           type: "full-state",
@@ -113,11 +143,16 @@ wss.on("connection", function connection(ws) {
           pieces: Object.fromEntries(rooms[msg.roomId].pieces),
         })
       );
+      broadcastUserList(msg.roomId);
       console.log(`[SERVER] Room created: ${msg.roomId}`);
       return;
     }
     // Join room
-    if (msg.type === "join-room" && typeof msg.roomId === "string") {
+    if (
+      msg.type === "join-room" &&
+      typeof msg.roomId === "string" &&
+      typeof msg.username === "string"
+    ) {
       if (!rooms[msg.roomId]) {
         ws.send(
           JSON.stringify({ type: "error", error: "Room does not exist" })
@@ -128,7 +163,9 @@ wss.on("connection", function connection(ws) {
         return;
       }
       rooms[msg.roomId].clients.add(ws);
+      rooms[msg.roomId].users.set(ws, { username: msg.username, score: 0 });
       ws.roomId = msg.roomId;
+      ws.username = msg.username;
       ws.send(
         JSON.stringify({
           type: "full-state",
@@ -136,6 +173,7 @@ wss.on("connection", function connection(ws) {
           pieces: Object.fromEntries(rooms[msg.roomId].pieces),
         })
       );
+      broadcastUserList(msg.roomId);
       console.log(`[SERVER] User joined room: ${msg.roomId}`);
       return;
     }
@@ -161,6 +199,7 @@ wss.on("connection", function connection(ws) {
       });
       // Broadcast to others in room
       broadcastToRoom(msg.roomId, msg, ws);
+      // (Score logic can be added here)
       console.log(
         `[SERVER] Relayed ${msg.type} for ${msg.pieceId} in room ${msg.roomId}`
       );
@@ -173,6 +212,8 @@ wss.on("connection", function connection(ws) {
     // Remove from room
     if (ws.roomId && rooms[ws.roomId]) {
       rooms[ws.roomId].clients.delete(ws);
+      rooms[ws.roomId].users.delete(ws);
+      broadcastUserList(ws.roomId);
       // Do NOT delete the room when the last user leaves; persist state
       // Optionally, implement a timeout-based cleanup here if desired
     }

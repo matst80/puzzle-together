@@ -162,33 +162,56 @@ document.addEventListener("DOMContentLoaded", () => {
   const modalPieceSlider = document.getElementById("modalPieceSlider");
   const modalPieceCount = document.getElementById("modalPieceCount");
   const soloBtn = document.getElementById("soloBtn");
+  const usernameInput = document.getElementById("usernameInput");
+  const roomModalContent = document.getElementById("roomModalContent");
+
+  // Prefill username from localStorage if available
+  const savedUsername = localStorage.getItem("username");
+  if (savedUsername && usernameInput) {
+    usernameInput.value = savedUsername;
+  }
 
   modalPieceSlider.addEventListener("input", (e) => {
     modalPieceCount.textContent = e.target.value;
   });
 
-  // Remove 'let' from these assignments so they update the top-level variables
+  function getAndStoreUsername() {
+    const username = usernameInput ? usernameInput.value.trim() : "";
+    if (username) localStorage.setItem("username", username);
+    return username;
+  }
+
   createRoomBtn.onclick = () => {
     const roomId = roomNameInput.value.trim();
     const gridSize = parseInt(modalPieceSlider.value, 10);
+    const username = getAndStoreUsername();
     if (!roomId) {
       showRoomError("Please enter a room name.");
       return;
     }
+    if (!username) {
+      showRoomError("Please enter a username.");
+      return;
+    }
     currentRoomId = roomId;
     currentGridSize = gridSize;
-    setupWebSocketAndRoom(roomId, gridSize, true);
+    setupWebSocketAndRoom(roomId, gridSize, true, username);
     // Do NOT show controls here
   };
 
   joinRoomBtn.onclick = () => {
     const roomId = roomNameInput.value.trim();
+    const username = getAndStoreUsername();
     if (!roomId) {
       showRoomError("Please enter a room name.");
       return;
     }
+    if (!username) {
+      showRoomError("Please enter a username.");
+      return;
+    }
     currentRoomId = roomId;
-    setupWebSocketAndRoom(roomId, null, false);
+    setupWebSocketAndRoom(roomId, null, false, username);
     // Do NOT show controls here
   };
 
@@ -212,6 +235,36 @@ document.addEventListener("DOMContentLoaded", () => {
   // Hide controls until in a room
   hideControls();
   showRoomModal();
+
+  const roomListDiv = document.createElement("div");
+  roomListDiv.id = "roomListDiv";
+  roomModalContent.insertBefore(roomListDiv, roomNameInput.parentNode);
+
+  async function fetchRoomList() {
+    try {
+      const res = await fetch("/rooms");
+      if (!res.ok) return;
+      const rooms = await res.json();
+      roomListDiv.innerHTML =
+        "<b>Active Rooms:</b><br>" +
+        (rooms.length === 0
+          ? "<i>No rooms</i>"
+          : rooms
+              .map(
+                (r) =>
+                  `<div style='margin-bottom:4px'><b>${r.roomId}</b> (${
+                    r.userCount
+                  } users): <span style='font-size:90%'>${r.users
+                    .map((u) => u.username)
+                    .join(", ")}</span></div>`
+              )
+              .join(""));
+    } catch (e) {
+      roomListDiv.innerHTML = "<i>Could not load rooms</i>";
+    }
+  }
+  setInterval(fetchRoomList, 3000);
+  fetchRoomList();
 });
 
 // Top-level multiplayer state variables (declare only once, before DOMContentLoaded)
@@ -220,7 +273,7 @@ let currentRoomId = null;
 let currentGridSize = null;
 let boardReady = false;
 
-function setupWebSocketAndRoom(roomId, gridSize, isCreate) {
+function setupWebSocketAndRoom(roomId, gridSize, isCreate, username) {
   // Use relative path for WebSocket, so it works behind Ingress
   const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
   const wsHost = window.location.host;
@@ -237,6 +290,7 @@ function setupWebSocketAndRoom(roomId, gridSize, isCreate) {
           type: "create-room",
           roomId,
           gridSize,
+          username,
         })
       );
     } else {
@@ -244,6 +298,7 @@ function setupWebSocketAndRoom(roomId, gridSize, isCreate) {
         JSON.stringify({
           type: "join-room",
           roomId,
+          username,
         })
       );
     }
@@ -264,6 +319,10 @@ function setupWebSocketAndRoom(roomId, gridSize, isCreate) {
 function handleWSMessage(data) {
   try {
     const msg = JSON.parse(data);
+    if (msg.type === "user-list") {
+      showUserList(msg.users);
+      return;
+    }
     if (msg.type === "full-state") {
       hideRoomModal();
       hideControls(); // Always hide controls for multiplayer

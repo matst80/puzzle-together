@@ -74,6 +74,13 @@ spec:
             name: puzzle-game
             port:
               number: 3001
+      - path: /rooms
+        pathType: Prefix
+        backend:
+          service:
+            name: puzzle-game
+            port:
+              number: 3001
       - path: /
         pathType: Prefix
         backend:

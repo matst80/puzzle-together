@@ -64,12 +64,6 @@ export class Piece {
     this.mesh = null; // Clear the mesh reference
   }
   createMesh(scene, material, gridSize) {
-    console.log(
-      "Creating mesh for piece at grid position:",
-      this.gridX,
-      this.gridY,
-      this.size
-    );
     this.gridSize = gridSize;
     const shape = new THREE.Shape();
     // top left corner
