@@ -1,142 +1,52 @@
 import * as THREE from "three";
+import { Connector } from "./Connector";
+import { AnimationController } from "./AnimationController";
 
-class Position {
+export class Position {
   constructor(x, y) {
     this.x = x;
     this.y = y;
   }
 }
 
-export class Board {
-  constructor(texture, gridSize, scene) {
-    this.texture = texture;
-    this.gridSize = gridSize;
-    this.group = new THREE.Group();
-    scene.add(this.group); // Add group to scene
-    const pieceSizePercent = 1.0 / gridSize;
-    this.pieces = Array.from(gridSize * gridSize);
-    const material = new THREE.MeshStandardMaterial({
-      map: texture || null,
-      color: texture
-        ? 0xffffff
-        : new THREE.Color(Math.random(), Math.random(), Math.random()),
-      metalness: 0.3,
-      roughness: 0.6,
-    });
-    for (var i = 0; i < gridSize; i++) {
-      for (var j = 0; j < gridSize; j++) {
-        this.pieces[i * gridSize + j] = new Piece(
-          material,
-          i,
-          j,
-          pieceSizePercent
-        );
-      }
-    }
-    for (var i = 1; i < gridSize - 1; i++) {
-      for (var j = 1; j < gridSize - 1; j++) {
-        const current = this.pieces[i * gridSize + j];
-        current.setLeft(this.pieces[(i - 1) * gridSize + j]);
-        current.setRight(this.pieces[(i + 1) * gridSize + j]);
-        current.setTop(this.pieces[i * gridSize + (j - 1)]);
-        current.setBottom(this.pieces[i * gridSize + (j + 1)]);
-      }
-    }
-    for (var i = 0; i < gridSize; i++) {
-      for (var j = 0; j < gridSize; j++) {
-        const current = this.pieces[i * gridSize + j];
-        const gridX = (i - gridSize / 2 + 0.5) * pieceSizePercent;
-        const gridY = (j - gridSize / 2 + 0.5) * pieceSizePercent;
-
-        current.createMesh(scene, material);
-        current.setPosition(new Position(gridX, gridY));
-      }
-    }
-    // Make the table much larger than the puzzle area
-
-    const tableThickness = 0.2;
-    const tableMaterial = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
-    const tableGeometry = new THREE.BoxGeometry(3, 3, tableThickness);
-    const table = new THREE.Mesh(tableGeometry, tableMaterial);
-    table.position.set(0, 0, 0);
-    table.rotation.z = 0;
-    table.receiveShadow = true;
-    this.group.add(table); // Add to group, not scene
-
-    // Add the puzzle image overlay (low opacity) centered on the table
-    if (this.texture) {
-      const puzzleTexture = this.texture.clone();
-      puzzleTexture.needsUpdate = true;
-      puzzleTexture.center.set(0.5, 0.5);
-      puzzleTexture.rotation = 0;
-      const puzzleMaterial = new THREE.MeshStandardMaterial({
-        map: puzzleTexture,
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.45,
-        metalness: 0.2,
-        roughness: 0.7,
-      });
-      const puzzleGeometry = new THREE.BoxGeometry(1, 1, 0.01);
-      const puzzleImage = new THREE.Mesh(puzzleGeometry, puzzleMaterial);
-      puzzleImage.position.set(0, 0, tableThickness / 2 + 0.005);
-      puzzleImage.rotation.z = 0;
-      puzzleImage.receiveShadow = false;
-      this.group.add(puzzleImage); // Add to group, not scene
-    }
-  }
-
-  update(scene) {
-    // console.log(scene);
-  }
-  render() {}
-}
-
-class Connector {
-  constructor(direction, offset, profile, from, to) {
-    this.direction = direction; // 'horizontal' or 'vertical'
-    this.offset = offset; // Position offset for the connector
-    this.profile = profile; // Profile of the connector
-    this.from = from; // Piece this connector is from
-    this.to = to; // Piece this connector is to
-  }
-  drawTop(shape) {
-    const offset = this.offset * this.from.size - this.from.size / 2;
-    shape.lineTo(this.size / 2, -this.size / 2);
-  }
-  drawBottom(shape) {
-    const offset = this.offset * this.from.size - this.from.size / 2;
-    shape.lineTo(-this.from.size / 2, this.size / 2);
-  }
-  drawLeft(shape) {
-    const offset = this.offset * this.from.size - this.from.size / 2;
-    shape.lineTo(-this.size / 2, -this.size / 2);
-  }
-  drawRight(shape) {
-    const offset = this.offset * this.from.size - this.from.size / 2;
-    shape.lineTo(this.size / 2, this.size / 2);
-  }
-}
-
-const extrudeSettings = {
-  steps: 2,
-  depth: 0.1,
-  bevelEnabled: true,
-  bevelThickness: 0.01,
-  bevelSize: 0.01,
-  bevelOffset: 0,
-  bevelSegments: 5,
+const isCloseTo = (x, y) => (piece) => {
+  if (!piece) return false; // Handle undefined piece
+  const correctX = piece.group.position.x;
+  const correctY = piece.group.position.y;
+  const threshold = piece.size * 0.6; // Allow some tolerance
+  const dx = x - correctX;
+  const dy = y - correctY;
+  return dx * dx + dy * dy < threshold * threshold;
 };
 
-class Piece {
+export class Piece {
   constructor(gridX, gridY, size) {
     this.gridX = gridX;
     this.gridY = gridY;
     this.position = new Position(0, 0);
     this.size = size;
     this.group = new THREE.Group();
+    // Drag/animation state
+    this._dragging = false;
+
+    this._pickupTargetZ = 0.4;
+
+    this._dragPlaneZ = 0.3;
+
+    // Animation controller for position/scale
+    this.animController = new AnimationController(this.group, {
+      epsilon: 0.002,
+      speed: 0.12,
+    });
+    this._lastDragTarget = null;
   }
-  createMesh(scene, material) {
+  createMesh(scene, material, gridSize) {
+    console.log(
+      "Creating mesh for piece at grid position:",
+      this.gridX,
+      this.gridY,
+      this.size
+    );
     const shape = new THREE.Shape();
     // top left corner
     shape.moveTo(-this.size / 2, -this.size / 2);
@@ -166,26 +76,58 @@ class Piece {
       shape.closePath();
     }
 
-    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    // --- BASE MESH (cardboard/paper sides & bottom) ---
+    const baseExtrudeSettings = {
+      steps: 2,
+      depth: 0.03,
+      bevelEnabled: false,
+    };
+    const baseGeometry = new THREE.ExtrudeGeometry(shape, baseExtrudeSettings);
+    // Cardboard/paper material for all faces
+    const paperMaterial = new THREE.MeshStandardMaterial({
+      color: 0xc2b280,
+      roughness: 0.8,
+      metalness: 0.1,
+    });
+    const baseMesh = new THREE.Mesh(baseGeometry, paperMaterial);
+    baseMesh.castShadow = true;
+    baseMesh.receiveShadow = false;
 
-    const uvAttribute = geometry.getAttribute("uv");
-    const position = geometry.getAttribute("position");
+    // --- TOP MESH (puzzle image, beveled) ---
+    // Slightly increase depth and offset to fully cover base
+    const topExtrudeSettings = {
+      steps: 2,
+      depth: 0.002, // slightly more than base
+      bevelEnabled: true,
+      bevelThickness: 0.011, // slightly more than before
+      bevelSize: 0.011,
+      bevelOffset: -0.011,
+      bevelSegments: 8,
+    };
+    const topGeometry = new THREE.ExtrudeGeometry(shape, topExtrudeSettings);
+    // Calculate UV mapping for the top mesh
+    const uvAttribute = topGeometry.getAttribute("uv");
+    const position = topGeometry.getAttribute("position");
     for (let k = 0; k < uvAttribute.count; k++) {
       const x = position.getX(k);
       const y = position.getY(k);
-      // Use full x/y including connectors for UV mapping
-      const u = (x + this.size / 2) / this.size;
-      const v = (y + this.size / 2) / this.size;
-      console.dir({ x, y, u, v });
+      const u = (this.gridX + (x + this.size / 2) / this.size) / gridSize;
+      const v = (this.gridY + (y + this.size / 2) / this.size) / gridSize;
       uvAttribute.setXY(k, u, v);
     }
+    const topMesh = new THREE.Mesh(topGeometry, material);
+    topMesh.castShadow = true;
+    topMesh.receiveShadow = false;
+    // Position the top mesh to fully cover the base
+    topMesh.position.z = 0.03;
 
-    this.mesh = new THREE.Mesh(geometry, material);
+    // --- GROUPING ---
 
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = false;
-    this.group.add(this.mesh); // Add mesh to group
-    scene.add(this.group); // Add mesh to scene
+    this.group.add(baseMesh);
+    this.group.add(topMesh);
+    this.mesh = topMesh; // For setPosition
+    this.bottomMesh = baseMesh; // For setPosition
+    scene.add(this.group);
   }
   setTop(piece) {
     this.top = piece;
@@ -273,10 +215,110 @@ class Piece {
   }
   setPosition(position) {
     this.position = position;
-    this.mesh.position.set(
+    this.group.position.set(
       position.x,
       position.y,
-      0.05 // Slightly above the table
+      this._dragPlaneZ // Use drag plane as default Z
     );
+  }
+  // Animate pickup (lift and scale up)
+  pickup() {
+    console.log(
+      "Pickup animation started for piece at:",
+      this.gridX,
+      this.gridY,
+      this._dragging
+    );
+    if (!this._dragging) {
+      this._dragging = true;
+      this.animController.animateTo({
+        position: new THREE.Vector3(
+          this.group.position.x,
+          this.group.position.y,
+          this._pickupTargetZ
+        ),
+        scale: new THREE.Vector3(1, 1, 1),
+      });
+    }
+  }
+  // Animate putdown (lower and scale to 1)
+  putdown() {
+    if (this._dragging) {
+      this._dragging = false;
+      this.animController.animateTo({
+        position: new THREE.Vector3(
+          this.group.position.x,
+          this.group.position.y,
+          this._dragPlaneZ
+        ),
+        scale: new THREE.Vector3(1, 1, 1),
+      });
+    }
+  }
+  // Call every frame
+  updateAnimation() {
+    this.animController.update();
+  }
+  getCorrectBoardPosition(gridSize) {
+    // Use the exact centering logic as Board
+    const pieceSizePercent = this.size;
+    const correctX = (this.gridX - gridSize / 2 - 1) * pieceSizePercent;
+    const correctY = (this.gridY - gridSize / 2 - 1) * pieceSizePercent;
+    return { x: correctX, y: correctY };
+  }
+
+  isCloseToCorrectBoardPosition(x, y, gridSize) {
+    const { x: correctX, y: correctY } = this.getCorrectBoardPosition(gridSize);
+    const threshold = this.size * 0.6;
+    const dx = x - correctX;
+    const dy = y - correctY;
+    //console.log({ delta: dx * dx + dy * dy, threshold: threshold * threshold });
+
+    return dx * dx + dy * dy < threshold * threshold;
+  }
+  getTargetPieces(x, y) {
+    return [this.top, this.bottom, this.left, this.right].filter(
+      isCloseTo(x, y)
+    );
+  }
+  handleDrag(x, y, z) {
+    if (this._dragging) {
+      const gridSize = this.gridSize || 1; // fallback if not set
+      if (this.isCloseToCorrectBoardPosition(x, y, gridSize)) {
+        const { x: correctX, y: correctY } =
+          this.getCorrectBoardPosition(gridSize);
+        this.animController.animateTo({
+          position: new THREE.Vector3(correctX, correctY, this._pickupTargetZ),
+        });
+        return;
+      } else {
+        // For each neighbor, check if the dragged position is close to the correct edge
+        const neighbors = [
+          { piece: this.top, dx: 0, dy: this.size }, // top neighbor: dragged piece above
+          { piece: this.bottom, dx: 0, dy: -this.size }, // bottom neighbor: dragged piece below
+          { piece: this.left, dx: this.size, dy: 0 }, // left neighbor: dragged piece right of neighbor
+          { piece: this.right, dx: -this.size, dy: 0 }, // right neighbor: dragged piece left of neighbor
+        ];
+        const threshold = this.size * 0.5;
+        for (const { piece: neighbor, dx, dy } of neighbors) {
+          if (!neighbor) continue;
+          const snapX = neighbor.group.position.x + dx;
+          const snapY = neighbor.group.position.y + dy;
+          const distSq = (x - snapX) * (x - snapX) + (y - snapY) * (y - snapY);
+
+          if (distSq < threshold * threshold) {
+            console.log({ distSq, threshold: threshold * threshold });
+            this.animController.animateTo({
+              position: new THREE.Vector3(snapX, snapY, this._pickupTargetZ),
+            });
+            return;
+          }
+        }
+      }
+      // If no neighbors matched, just update position directly
+      this.animController.animateTo({
+        position: new THREE.Vector3(x, y, this._pickupTargetZ),
+      });
+    }
   }
 }

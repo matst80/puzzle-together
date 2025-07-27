@@ -2,7 +2,7 @@ import "./style.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 //import { createPuzzle, disposePuzzle } from "./puzzle.js";
-import { Board } from "./piece.js";
+import { Board } from "./Board.js";
 
 // Scene
 const scene = new THREE.Scene();
@@ -26,11 +26,21 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 
 // Lights
-const pointLight = new THREE.PointLight(0xffffff);
+const pointLight = new THREE.PointLight(0xffffff, 1.5, 100);
 pointLight.position.set(5, 5, 5);
+pointLight.castShadow = true;
+pointLight.shadow.bias = -0.005;
 
-const ambientLight = new THREE.AmbientLight(0xffffff);
-scene.add(pointLight, ambientLight);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight.position.set(-5, 10, 7);
+dirLight.castShadow = true;
+dirLight.shadow.bias = -0.005;
+scene.add(pointLight, ambientLight, dirLight);
+
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 // Controls
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -70,17 +80,29 @@ let initialPieces = parseInt(pieceSlider.value, 10);
 pieceCountLabel.textContent = initialPieces;
 
 textureLoader.load("/puzzle.jpg", (texture) => {
-  //texture.needsUpdate = true;
-  //console.log("Texture loaded:", texture, initialPieces);
   const board = new Board(texture, initialPieces, scene);
+
+  // --- DRAG LOGIC ---
+  function onPointerDown(event) {
+    board.onPointerDown(event, camera, renderer.domElement, controls);
+  }
+  function onPointerMove(event) {
+    board.onPointerMove(event, camera, renderer.domElement, controls);
+  }
+  function onPointerUp(event) {
+    board.onPointerUp(event, camera, renderer.domElement, controls);
+  }
+
+  renderer.domElement.addEventListener("pointerdown", onPointerDown);
+  renderer.domElement.addEventListener("pointermove", onPointerMove);
+  renderer.domElement.addEventListener("pointerup", onPointerUp);
+
   function animate() {
     controls.update();
     board.update(scene);
-
     renderer.render(scene, camera);
     requestAnimationFrame(animate);
   }
-
   animate();
 });
 //recreatePuzzle(initialPieces);
