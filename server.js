@@ -1,29 +1,7 @@
 import { WebSocketServer } from "ws";
-import path from "path";
 import { createServer } from "http";
-import { readFileSync, existsSync } from "fs";
-import { fileURLToPath } from "url";
-import express from "express";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const app = express();
-const httpServer = createServer(app);
-
-// Serve static files from public and root
-app.use(express.static(path.join(__dirname, "public")));
-app.use(express.static(__dirname));
-
-// Fallback to index.html for SPA
-app.get("/*", (req, res) => {
-  const indexPath = path.join(__dirname, "index.html");
-  if (existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.status(404).send("Not found");
-  }
-});
+const httpServer = createServer();
 
 const DEFAULT_GRID_SIZE = 4;
 

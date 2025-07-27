@@ -4,14 +4,14 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --production
 COPY . .
-# Build static assets into dist (add this step)
-RUN npm run build || mkdir dist
+COPY src .
+# Build static assets into dist
+RUN npm run build 
 
 # Production stage
 FROM nginx:alpine AS prod
 WORKDIR /usr/share/nginx/html
 COPY --from=build /app/public ./public
-COPY --from=build /app/index.html ./
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/nginx.conf /etc/nginx/nginx.conf
 

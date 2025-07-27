@@ -1,8 +1,14 @@
 import * as THREE from "three";
-import { Piece, Position } from "./Piece";
+import { Piece, Position } from "./piece";
 
 export class Board {
-  constructor(texture, gridSize, scene, piecesState = null) {
+  constructor(
+    texture,
+    gridSize,
+    scene,
+    piecesState = null,
+    sendPieceMove = null
+  ) {
     this.texture = texture;
     this.gridSize = gridSize;
     this.group = new THREE.Group();
@@ -21,7 +27,7 @@ export class Board {
     for (var i = 0; i < gridSize; i++) {
       for (var j = 0; j < gridSize; j++) {
         const id = `${i}_${j}`;
-        const piece = new Piece(i, j, pieceSizePercent);
+        const piece = new Piece(i, j, pieceSizePercent, id, sendPieceMove);
         piece.id = id;
         this.pieces[i * gridSize + j] = piece;
       }
@@ -188,12 +194,30 @@ export class Board {
     const intersection = new THREE.Vector3();
     this._raycaster.ray.intersectPlane(plane, intersection);
     if (intersection) {
-      // Call handleDrag on the Piece instead of setting position directly
       this._selectedPiece.handleDrag(
         intersection.x + this._dragOffset.x,
         intersection.y + this._dragOffset.y,
         this._dragPlaneZ
       );
+    }
+  }
+  pieceMovedByOtherPlayer({ pieceId, x, y, z }) {
+    const piece = this.pieces.find((p) => p.id === pieceId);
+    if (piece) {
+      piece.moveByOtherPlayer(
+        new THREE.Vector3(
+          x,
+          y,
+          z // Use drag plane as default Z
+        )
+      );
+    }
+  }
+  // Animate pieces dragged by other users to same height and reduce opacity
+  update(scene) {
+    // Animate pickup/putdown for all pieces via Piece's updateAnimation
+    for (const piece of this.pieces) {
+      piece.updateAnimation();
     }
   }
   dispose(scene) {
@@ -218,11 +242,5 @@ export class Board {
     if (controls) controls.enabled = true;
   }
 
-  update(scene) {
-    // Animate pickup/putdown for all pieces via Piece's updateAnimation
-    for (const piece of this.pieces) {
-      piece.updateAnimation();
-    }
-  }
   render() {}
 }

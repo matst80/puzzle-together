@@ -99,7 +99,15 @@ function disposeBoard() {
 
 function createBoard(texture, size) {
   disposeBoard();
-  currentBoard = new Board(texture, size, scene);
+  currentBoard = new Board(
+    texture,
+    size,
+    scene,
+    null,
+    ws,
+    currentRoomId,
+    boardReady
+  );
   currentListeners.down = (event) =>
     currentBoard.onPointerDown(event, camera, renderer.domElement, controls);
   currentListeners.move = (event) =>
@@ -216,7 +224,12 @@ function setupWebSocketAndRoom(roomId, gridSize, isCreate) {
   // Use relative path for WebSocket, so it works behind Ingress
   const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
   const wsHost = window.location.host;
-  ws = new window.WebSocket(`${wsProtocol}://${wsHost}/ws`);
+  console.log(wsHost, wsProtocol);
+  ws = new window.WebSocket(
+    wsHost.includes("localhost")
+      ? `wss://puzzle.tornberg.me/ws`
+      : `${wsProtocol}://${wsHost}/ws`
+  );
   ws.onopen = () => {
     if (isCreate) {
       ws.send(
@@ -274,12 +287,7 @@ function handleWSMessage(data) {
       (msg.type === "piece-move" || msg.type === "piece-drag") &&
       currentBoard
     ) {
-      const piece = currentBoard.pieces.find((p) => p.id === msg.pieceId);
-      if (piece) {
-        if (!currentBoard._dragging || currentBoard._selectedPiece !== piece) {
-          piece.setPosition({ x: msg.x, y: msg.y, z: msg.z });
-        }
-      }
+      currentBoard.pieceMovedByOtherPlayer(msg);
     } else if (msg.type === "error") {
       showRoomError(msg.error);
       showRoomModal();
@@ -294,7 +302,24 @@ function handleWSMessage(data) {
 function createBoardWithState(piecesState) {
   disposeBoard();
   const gridSize = Math.sqrt(Object.keys(piecesState).length) | 0;
-  currentBoard = new Board(currentTexture, gridSize, scene, piecesState);
+  currentBoard = new Board(
+    currentTexture,
+    gridSize,
+    scene,
+    piecesState,
+    ({ id, x, y, z }) => {
+      ws.send(
+        JSON.stringify({
+          type: "piece-move",
+          roomId: currentRoomId,
+          pieceId: id,
+          x,
+          y,
+          z,
+        })
+      );
+    }
+  );
   currentListeners.down = (event) =>
     currentBoard.onPointerDown(event, camera, renderer.domElement, controls);
   currentListeners.move = (event) =>
@@ -304,41 +329,6 @@ function createBoardWithState(piecesState) {
   renderer.domElement.addEventListener("pointerdown", currentListeners.down);
   renderer.domElement.addEventListener("pointermove", currentListeners.move);
   renderer.domElement.addEventListener("pointerup", currentListeners.up);
-}
-
-// Patch Board to emit piece moves with room and pieceId
-if (Board && !Board.prototype._wsPatched) {
-  const origHandleDrag = Board.prototype.onPointerMove;
-  Board.prototype.onPointerMove = function (
-    event,
-    camera,
-    domElement,
-    controls
-  ) {
-    origHandleDrag.call(this, event, camera, domElement, controls);
-    if (
-      boardReady &&
-      this._dragging &&
-      this._selectedPiece &&
-      ws &&
-      ws.readyState === 1 &&
-      this._selectedPiece.id &&
-      currentRoomId
-    ) {
-      const pos = this._selectedPiece.group.position;
-      ws.send(
-        JSON.stringify({
-          type: "piece-move",
-          roomId: currentRoomId,
-          pieceId: this._selectedPiece.id,
-          x: pos.x,
-          y: pos.y,
-          z: pos.z,
-        })
-      );
-    }
-  };
-  Board.prototype._wsPatched = true;
 }
 
 // Hide controls until in a room

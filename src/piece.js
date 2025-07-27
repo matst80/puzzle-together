@@ -20,7 +20,14 @@ const isCloseTo = (x, y) => (piece) => {
 };
 
 export class Piece {
-  constructor(gridX, gridY, size) {
+  constructor(
+    gridX,
+    gridY,
+    size,
+    id,
+    sendPieceMove = null,
+    onPieceMoved = null
+  ) {
     this.gridX = gridX;
     this.gridY = gridY;
     this.position = new Position(0, 0);
@@ -39,6 +46,13 @@ export class Piece {
       speed: 0.12,
     });
     this._lastDragTarget = null;
+    this.id = id;
+    this.sendPieceMove = sendPieceMove;
+    if (onPieceMoved) {
+      onPieceMoved((data) => {
+        console.log("Piece moved:", data);
+      });
+    }
 
     this.connected = { top: false, bottom: false, left: false, right: false };
   }
@@ -261,6 +275,12 @@ export class Piece {
       this.handleDrop(this.group.position.x, this.group.position.y);
       const group = Array.from(this.collectConnectedGroupByProperty());
       for (const piece of group) {
+        this.sendPieceMove?.({
+          x: piece.group.position.x,
+          y: piece.group.position.y,
+          z: this._dragPlaneZ,
+          id: piece.id,
+        });
         piece.animController.animateTo({
           position: new THREE.Vector3(
             piece.group.position.x,
@@ -321,7 +341,11 @@ export class Piece {
       }
     }
   }
-
+  moveByOtherPlayer(position) {
+    this.animController.animateTo({
+      position,
+    });
+  }
   // Recursively collect all connected pieces (using the connected property)
   collectConnectedGroupByProperty(group = new Set()) {
     if (group.has(this)) return group;
@@ -352,6 +376,12 @@ export class Piece {
         for (const piece of group) {
           const { x: correctX, y: correctY } =
             this.getCorrectBoardPosition(piece);
+          this.sendPieceMove?.({
+            x: correctX,
+            y: correctY,
+            z: this._dragPlaneZ,
+            id: piece.id,
+          });
           piece.animController.animateTo({
             position: new THREE.Vector3(
               correctX,
@@ -378,6 +408,12 @@ export class Piece {
               const dxSnap = snapX - this.group.position.x;
               const dySnap = snapY - this.group.position.y;
               for (const piece of group) {
+                this.sendPieceMove?.({
+                  x: piece.group.position.x + dxSnap,
+                  y: piece.group.position.y + dySnap,
+                  z: this._pickupTargetZ,
+                  id: piece.id,
+                });
                 piece.animController.animateTo({
                   position: new THREE.Vector3(
                     piece.group.position.x + dxSnap,
@@ -396,6 +432,12 @@ export class Piece {
       const dx = x - this.group.position.x;
       const dy = y - this.group.position.y;
       for (const piece of group) {
+        this.sendPieceMove?.({
+          x: piece.group.position.x + dx,
+          y: piece.group.position.y + dy,
+          z: this._pickupTargetZ,
+          id: piece.id,
+        });
         piece.animController.animateTo({
           position: new THREE.Vector3(
             piece.group.position.x + dx,
