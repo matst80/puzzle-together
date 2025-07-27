@@ -16,7 +16,7 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use(express.static(__dirname));
 
 // Fallback to index.html for SPA
-app.get("*", (req, res) => {
+app.get("/*", (req, res) => {
   const indexPath = path.join(__dirname, "index.html");
   if (existsSync(indexPath)) {
     res.sendFile(indexPath);

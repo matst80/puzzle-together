@@ -213,7 +213,10 @@ let currentGridSize = null;
 let boardReady = false;
 
 function setupWebSocketAndRoom(roomId, gridSize, isCreate) {
-  ws = new window.WebSocket("ws://localhost:3001");
+  // Use relative path for WebSocket, so it works behind Ingress
+  const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+  const wsHost = window.location.host;
+  ws = new window.WebSocket(`${wsProtocol}://${wsHost}/ws`);
   ws.onopen = () => {
     if (isCreate) {
       ws.send(
