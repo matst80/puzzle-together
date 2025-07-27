@@ -29,9 +29,9 @@ export class Piece {
     // Drag/animation state
     this._dragging = false;
 
-    this._pickupTargetZ = 0.4;
+    this._pickupTargetZ = 0.2;
 
-    this._dragPlaneZ = 0.3;
+    this._dragPlaneZ = 0.1;
 
     // Animation controller for position/scale
     this.animController = new AnimationController(this.group, {
@@ -39,6 +39,8 @@ export class Piece {
       speed: 0.12,
     });
     this._lastDragTarget = null;
+
+    this.connected = { top: false, bottom: false, left: false, right: false };
   }
   createMesh(scene, material, gridSize) {
     console.log(
@@ -47,6 +49,7 @@ export class Piece {
       this.gridY,
       this.size
     );
+    this.gridSize = gridSize;
     const shape = new THREE.Shape();
     // top left corner
     shape.moveTo(-this.size / 2, -this.size / 2);
@@ -231,47 +234,56 @@ export class Piece {
     );
     if (!this._dragging) {
       this._dragging = true;
-      this.animController.animateTo({
-        position: new THREE.Vector3(
-          this.group.position.x,
-          this.group.position.y,
-          this._pickupTargetZ
-        ),
-        scale: new THREE.Vector3(1, 1, 1),
-      });
+      // Move all connected pieces up
+      const group = Array.from(this.collectConnectedGroupByProperty());
+      for (const piece of group) {
+        piece.animController.animateTo({
+          position: new THREE.Vector3(
+            piece.group.position.x,
+            piece.group.position.y,
+            this._pickupTargetZ
+          ),
+        });
+      }
     }
   }
   // Animate putdown (lower and scale to 1)
   putdown() {
     if (this._dragging) {
       this._dragging = false;
-      this.animController.animateTo({
-        position: new THREE.Vector3(
-          this.group.position.x,
-          this.group.position.y,
-          this._dragPlaneZ
-        ),
-        scale: new THREE.Vector3(1, 1, 1),
-      });
+      this.handleDrop(this.group.position.x, this.group.position.y);
+      const group = Array.from(this.collectConnectedGroupByProperty());
+      for (const piece of group) {
+        piece.animController.animateTo({
+          position: new THREE.Vector3(
+            piece.group.position.x,
+            piece.group.position.y,
+            this._dragPlaneZ
+          ),
+        });
+      }
     }
   }
   // Call every frame
   updateAnimation() {
     this.animController.update();
   }
-  getCorrectBoardPosition(gridSize) {
-    // Use the exact centering logic as Board
-    const pieceSizePercent = this.size;
-    const correctX = (this.gridX - gridSize / 2 - 1) * pieceSizePercent;
-    const correctY = (this.gridY - gridSize / 2 - 1) * pieceSizePercent;
-    return { x: correctX, y: correctY };
+  getCorrectBoardPosition(piece = this) {
+    // Use the same centering logic as Board.js
+    const gridSize = this.gridSize || piece.gridSize;
+    const pieceSizePercent = piece.size;
+    return {
+      x: (piece.gridX - gridSize / 2 + 0.5) * pieceSizePercent,
+      y: (piece.gridY - gridSize / 2 + 0.5) * pieceSizePercent,
+    };
   }
 
-  isCloseToCorrectBoardPosition(x, y, gridSize) {
-    const { x: correctX, y: correctY } = this.getCorrectBoardPosition(gridSize);
+  isCloseToCorrectBoardPosition(x, y) {
+    const correct = this.getCorrectBoardPosition(this);
+
     const threshold = this.size * 0.6;
-    const dx = x - correctX;
-    const dy = y - correctY;
+    const dx = x - correct.x;
+    const dy = y - correct.y;
     //console.log({ delta: dx * dx + dy * dy, threshold: threshold * threshold });
 
     return dx * dx + dy * dy < threshold * threshold;
@@ -281,44 +293,110 @@ export class Piece {
       isCloseTo(x, y)
     );
   }
+  // Call this on drop to set connection if close to a neighbor
+  handleDrop(x, y) {
+    const neighbors = this.neighbors();
+    const threshold = this.size * 0.5;
+    for (const { key, piece: neighbor, dx, dy } of neighbors) {
+      if (!neighbor) continue;
+      const snapX = neighbor.group.position.x + dx;
+      const snapY = neighbor.group.position.y + dy;
+      const distSq = (x - snapX) * (x - snapX) + (y - snapY) * (y - snapY);
+      const connected = (this.connected[key] = distSq < threshold * threshold);
+      if (key === "top" && this.top) {
+        this.top.connected.bottom = connected;
+      } else if (key === "bottom" && this.bottom) {
+        this.bottom.connected.top = connected;
+      } else if (key === "left" && this.left) {
+        this.left.connected.right = connected;
+      } else if (key === "right" && this.right) {
+        this.right.connected.left = connected;
+      }
+    }
+  }
+
+  // Recursively collect all connected pieces (using the connected property)
+  collectConnectedGroupByProperty(group = new Set()) {
+    if (group.has(this)) return group;
+    group.add(this);
+    if (this.connected.top && this.top)
+      this.top.collectConnectedGroupByProperty(group);
+    if (this.connected.bottom && this.bottom)
+      this.bottom.collectConnectedGroupByProperty(group);
+    if (this.connected.left && this.left)
+      this.left.collectConnectedGroupByProperty(group);
+    if (this.connected.right && this.right)
+      this.right.collectConnectedGroupByProperty(group);
+    return group;
+  }
+  neighbors() {
+    return [
+      { key: "top", piece: this.top, dx: 0, dy: this.size },
+      { key: "bottom", piece: this.bottom, dx: 0, dy: -this.size },
+      { key: "left", piece: this.left, dx: this.size, dy: 0 },
+      { key: "right", piece: this.right, dx: -this.size, dy: 0 },
+    ];
+  }
   handleDrag(x, y, z) {
     if (this._dragging) {
-      const gridSize = this.gridSize || 1; // fallback if not set
-      if (this.isCloseToCorrectBoardPosition(x, y, gridSize)) {
-        const { x: correctX, y: correctY } =
-          this.getCorrectBoardPosition(gridSize);
-        this.animController.animateTo({
-          position: new THREE.Vector3(correctX, correctY, this._pickupTargetZ),
-        });
+      const group = Array.from(this.collectConnectedGroupByProperty());
+
+      if (this.isCloseToCorrectBoardPosition(x, y)) {
+        for (const piece of group) {
+          const { x: correctX, y: correctY } =
+            this.getCorrectBoardPosition(piece);
+          piece.animController.animateTo({
+            position: new THREE.Vector3(
+              correctX,
+              correctY,
+              this._pickupTargetZ
+            ),
+          });
+        }
         return;
       } else {
         // For each neighbor, check if the dragged position is close to the correct edge
-        const neighbors = [
-          { piece: this.top, dx: 0, dy: this.size }, // top neighbor: dragged piece above
-          { piece: this.bottom, dx: 0, dy: -this.size }, // bottom neighbor: dragged piece below
-          { piece: this.left, dx: this.size, dy: 0 }, // left neighbor: dragged piece right of neighbor
-          { piece: this.right, dx: -this.size, dy: 0 }, // right neighbor: dragged piece left of neighbor
-        ];
-        const threshold = this.size * 0.5;
-        for (const { piece: neighbor, dx, dy } of neighbors) {
-          if (!neighbor) continue;
-          const snapX = neighbor.group.position.x + dx;
-          const snapY = neighbor.group.position.y + dy;
-          const distSq = (x - snapX) * (x - snapX) + (y - snapY) * (y - snapY);
+        if (group.length === 1) {
+          const neighbors = this.neighbors();
+          const threshold = this.size * 0.5;
+          for (const { piece: neighbor, dx, dy } of neighbors) {
+            if (!neighbor) continue;
+            const snapX = neighbor.group.position.x + dx;
+            const snapY = neighbor.group.position.y + dy;
+            const distSq =
+              (x - snapX) * (x - snapX) + (y - snapY) * (y - snapY);
+            if (distSq < threshold * threshold) {
+              // Move all connected pieces to snap position
 
-          if (distSq < threshold * threshold) {
-            console.log({ distSq, threshold: threshold * threshold });
-            this.animController.animateTo({
-              position: new THREE.Vector3(snapX, snapY, this._pickupTargetZ),
-            });
-            return;
+              const dxSnap = snapX - this.group.position.x;
+              const dySnap = snapY - this.group.position.y;
+              for (const piece of group) {
+                piece.animController.animateTo({
+                  position: new THREE.Vector3(
+                    piece.group.position.x + dxSnap,
+                    piece.group.position.y + dySnap,
+                    this._pickupTargetZ
+                  ),
+                });
+              }
+              return;
+            }
           }
         }
       }
-      // If no neighbors matched, just update position directly
-      this.animController.animateTo({
-        position: new THREE.Vector3(x, y, this._pickupTargetZ),
-      });
+      // Move all connected pieces together
+
+      const dx = x - this.group.position.x;
+      const dy = y - this.group.position.y;
+      for (const piece of group) {
+        piece.animController.animateTo({
+          position: new THREE.Vector3(
+            piece.group.position.x + dx,
+            piece.group.position.y + dy,
+            this._pickupTargetZ
+          ),
+        });
+      }
     }
   }
 }

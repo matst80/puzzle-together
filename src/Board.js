@@ -34,14 +34,61 @@ export class Board {
           current.setBottom(this.pieces[i * gridSize + (j + 1)]);
       }
     }
+    // Pre-create all meshes once
     for (var i = 0; i < gridSize; i++) {
       for (var j = 0; j < gridSize; j++) {
         const current = this.pieces[i * gridSize + j];
-        const gridX = (i - gridSize / 2 + 0.5) * pieceSizePercent * 1.5;
-        const gridY = (j - gridSize / 2 + 0.5) * pieceSizePercent * 1.5;
-
         current.createMesh(scene, material, gridSize);
-        current.setPosition(new Position(gridX, gridY));
+      }
+    }
+    // Place pieces at random positions without overlap
+    const placedBoxes = [];
+    for (var i = 0; i < gridSize; i++) {
+      for (var j = 0; j < gridSize; j++) {
+        const current = this.pieces[i * gridSize + j];
+        const pieceSize = 1.0 / gridSize;
+        let placed = false;
+        let attempts = 0;
+        const maxAttempts = 200;
+        let randX, randY;
+        while (!placed && attempts < maxAttempts) {
+          randX = Math.random() * 2.4 - 1.2;
+          randY = Math.random() * 2.4 - 1.2;
+          let box = {
+            minX: randX - pieceSize / 2,
+            maxX: randX + pieceSize / 2,
+            minY: randY - pieceSize / 2,
+            maxY: randY + pieceSize / 2,
+          };
+          let collision = false;
+          for (const placed of placedBoxes) {
+            if (
+              box.maxX > placed.minX &&
+              box.minX < placed.maxX &&
+              box.maxY > placed.minY &&
+              box.minY < placed.maxY
+            ) {
+              collision = true;
+              break;
+            }
+          }
+          if (!collision) {
+            placed = true;
+            current.setPosition(new Position(randX, randY, 0));
+            placedBoxes.push(box);
+          }
+          attempts++;
+        }
+        if (!placed) {
+          // Fallback: just place at random (may overlap, but very unlikely)
+          current.setPosition(new Position(randX, randY, 0));
+          placedBoxes.push({
+            minX: randX - pieceSize / 2,
+            maxX: randX + pieceSize / 2,
+            minY: randY - pieceSize / 2,
+            maxY: randY + pieceSize / 2,
+          });
+        }
       }
     }
     // Make the table much larger than the puzzle area
