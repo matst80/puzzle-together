@@ -1,12 +1,14 @@
 # Build stage
-FROM node:20-alpine as build
+FROM node:20-alpine AS build
 WORKDIR /app
 COPY package.json ./
 RUN npm install --production
 COPY . .
+# Build static assets into dist (add this step)
+RUN npm run build || mkdir dist
 
 # Production stage
-FROM nginx:alpine as prod
+FROM nginx:alpine AS prod
 WORKDIR /usr/share/nginx/html
 COPY --from=build /app/public ./public
 COPY --from=build /app/index.html ./
