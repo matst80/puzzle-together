@@ -375,15 +375,12 @@ function handleWSMessage(data) {
         pieceSlider.value = pieceCount;
         pieceCountLabel.textContent = pieceCount;
       }
-      // Ensure currentTexture is set before creating the board
-      if (!currentTexture) {
-        textureLoader.load("/puzzle.jpg", (texture) => {
-          currentTexture = texture;
-          createBoardWithState(msg.pieces);
-        });
-      } else {
+      // Always load the imageUrl from server for each room
+      const imageToUse = msg.imageUrl || "/puzzle.jpg";
+      textureLoader.load(imageToUse, (texture) => {
+        currentTexture = texture;
         createBoardWithState(msg.pieces);
-      }
+      });
     } else if (
       (msg.type === "piece-move" || msg.type === "piece-drag") &&
       currentBoard

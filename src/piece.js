@@ -369,6 +369,7 @@ export class Piece {
       const group = Array.from(this.collectConnectedGroupByProperty());
 
       if (this.isCloseToCorrectBoardPosition(x, y)) {
+        this._dragging = false;
         for (const piece of group) {
           const { x: correctX, y: correctY } =
             this.getCorrectBoardPosition(piece);
@@ -380,11 +381,7 @@ export class Piece {
             correct: true, // Indicate correct placement
           });
           piece.animController.animateTo({
-            position: new THREE.Vector3(
-              correctX,
-              correctY,
-              this._pickupTargetZ
-            ),
+            position: new THREE.Vector3(correctX, correctY, this._dragPlaneZ),
           });
         }
         return;

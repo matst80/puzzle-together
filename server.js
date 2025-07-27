@@ -25,6 +25,18 @@ const DEFAULT_GRID_SIZE = 4;
 // Room state: { [roomId]: { pieces: Map<pieceId, {x, y, z, dragging}>, clients: Set<ws>, users: Map<ws, {username, score}>, correctPieces: Set<pieceId> } }
 const rooms = {};
 
+// List of random puzzle image URLs
+const PUZZLE_IMAGES = [
+  "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80", // Forest
+  "https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=600&q=80", // Mountain
+  "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=600&q=80", // Beach
+  "https://images.unsplash.com/photo-1465101178521-c1a9136a3b99?auto=format&fit=crop&w=600&q=80", // Lake
+  "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=600&q=80", // City
+  "https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=600&q=80", // Nature
+  "https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=600&q=80", // Flowers
+  "https://images.unsplash.com/photo-1465101178521-c1a9136a3b99?auto=format&fit=crop&w=600&q=80", // Water
+];
+
 function generateInitialPositions(gridSize = DEFAULT_GRID_SIZE) {
   const pieces = new Map();
   const usedBoxes = [];
@@ -129,10 +141,14 @@ wss.on("connection", function connection(ws) {
         console.log(`[SERVER] Attempt to create existing room: ${msg.roomId}`);
         return;
       }
+      // Pick a random image for the room
+      const imageUrl =
+        PUZZLE_IMAGES[Math.floor(Math.random() * PUZZLE_IMAGES.length)];
       rooms[msg.roomId] = {
         pieces: generateInitialPositions(msg.gridSize),
         clients: new Set([ws]),
         users: new Map([[ws, { username: msg.username, score: 0 }]]),
+        imageUrl,
       };
       ws.roomId = msg.roomId;
       ws.username = msg.username;
@@ -141,6 +157,7 @@ wss.on("connection", function connection(ws) {
           type: "full-state",
           roomId: msg.roomId,
           pieces: Object.fromEntries(rooms[msg.roomId].pieces),
+          imageUrl,
         })
       );
       broadcastUserList(msg.roomId);
@@ -171,6 +188,7 @@ wss.on("connection", function connection(ws) {
           type: "full-state",
           roomId: msg.roomId,
           pieces: Object.fromEntries(rooms[msg.roomId].pieces),
+          imageUrl: rooms[msg.roomId].imageUrl,
         })
       );
       broadcastUserList(msg.roomId);
