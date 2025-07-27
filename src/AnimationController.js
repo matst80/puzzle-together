@@ -12,7 +12,12 @@ export class AnimationController {
     this._lastPositionTarget = null;
     this._lastScaleTarget = null;
   }
-
+  dispose() {
+    this.animations = [];
+    this.active = false;
+    this._lastPositionTarget = null;
+    this._lastScaleTarget = null;
+  }
   animateTo(props, speed) {
     // props: { position: THREE.Vector3, scale: THREE.Vector3 }
     let needsNewAnim = false;

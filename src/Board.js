@@ -176,7 +176,17 @@ export class Board {
       );
     }
   }
-
+  dispose(scene) {
+    // Dispose all meshes and materials
+    for (const piece of this.pieces) {
+      piece.dispose(scene);
+    }
+    this.pieces = [];
+    scene.remove(this.group);
+    this.group = null; // Set to null to avoid memory leaks
+    this.texture.dispose(); // Dispose the texture if it exists
+    this.texture = null; // Set to null to avoid memory leaks
+  }
   onPointerUp(event, camera, domElement, controls) {
     if (!this._dragging || !this._selectedPiece) return;
     this._dragging = false;

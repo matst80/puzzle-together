@@ -75,43 +75,94 @@ const pieceCountLabel = document.getElementById("pieceCount");
 //   });
 // }
 
+// --- Board recreation and custom image logic ---
+let currentBoard = null;
+let currentTexture = null;
+let currentListeners = { down: null, move: null, up: null };
+
+function disposeBoard() {
+  if (currentBoard) {
+    renderer.domElement.removeEventListener(
+      "pointerdown",
+      currentListeners.down
+    );
+    renderer.domElement.removeEventListener(
+      "pointermove",
+      currentListeners.move
+    );
+    renderer.domElement.removeEventListener("pointerup", currentListeners.up);
+    currentBoard.dispose(scene);
+    currentBoard = null;
+  }
+}
+
+function createBoard(texture, size) {
+  disposeBoard();
+  currentBoard = new Board(texture, size, scene);
+  currentListeners.down = (event) =>
+    currentBoard.onPointerDown(event, camera, renderer.domElement, controls);
+  currentListeners.move = (event) =>
+    currentBoard.onPointerMove(event, camera, renderer.domElement, controls);
+  currentListeners.up = (event) =>
+    currentBoard.onPointerUp(event, camera, renderer.domElement, controls);
+  renderer.domElement.addEventListener("pointerdown", currentListeners.down);
+  renderer.domElement.addEventListener("pointermove", currentListeners.move);
+  renderer.domElement.addEventListener("pointerup", currentListeners.up);
+}
+
+function loadTextureAndCreateBoard(imageUrlOrTexture, size) {
+  if (typeof imageUrlOrTexture === "string") {
+    textureLoader.load(imageUrlOrTexture, (texture) => {
+      currentTexture = texture;
+      createBoard(texture, size);
+    });
+  } else {
+    // Already a THREE.Texture
+    currentTexture = imageUrlOrTexture;
+    createBoard(imageUrlOrTexture, size);
+  }
+}
+
 // Initial puzzle
 let initialPieces = parseInt(pieceSlider.value, 10);
 pieceCountLabel.textContent = initialPieces;
+loadTextureAndCreateBoard("/puzzle.jpg", initialPieces);
 
-textureLoader.load("/puzzle.jpg", (texture) => {
-  const board = new Board(texture, initialPieces, scene);
-
-  // --- DRAG LOGIC ---
-  function onPointerDown(event) {
-    board.onPointerDown(event, camera, renderer.domElement, controls);
-  }
-  function onPointerMove(event) {
-    board.onPointerMove(event, camera, renderer.domElement, controls);
-  }
-  function onPointerUp(event) {
-    board.onPointerUp(event, camera, renderer.domElement, controls);
-  }
-
-  renderer.domElement.addEventListener("pointerdown", onPointerDown);
-  renderer.domElement.addEventListener("pointermove", onPointerMove);
-  renderer.domElement.addEventListener("pointerup", onPointerUp);
-
-  function animate() {
-    controls.update();
-    board.update(scene);
-    renderer.render(scene, camera);
-    requestAnimationFrame(animate);
-  }
-  animate();
+// Slider event
+pieceSlider.addEventListener("input", (e) => {
+  const val = parseInt(e.target.value, 10);
+  pieceCountLabel.textContent = val;
+  loadTextureAndCreateBoard(currentTexture || "/puzzle.jpg", val);
 });
-//recreatePuzzle(initialPieces);
 
-// pieceSlider.addEventListener("input", (e) => {
-//   const val = parseInt(e.target.value, 10);
-//   pieceCountLabel.textContent = val;
-//   recreatePuzzle(val);
-// });
+// --- Custom image upload ---
+const imageInput = document.getElementById("customImageInput");
+if (imageInput) {
+  imageInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (event) {
+      const img = new window.Image();
+      img.onload = function () {
+        const texture = new THREE.Texture(img);
+        texture.needsUpdate = true;
+        currentTexture = texture;
+        loadTextureAndCreateBoard(texture, parseInt(pieceSlider.value, 10));
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function animate() {
+  controls.update();
+  if (currentBoard) currentBoard.update(scene);
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+animate();
 
 window.addEventListener("resize", onWindowResize, false);
 

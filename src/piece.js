@@ -42,6 +42,13 @@ export class Piece {
 
     this.connected = { top: false, bottom: false, left: false, right: false };
   }
+  dispose(scene) {
+    this.animController.dispose();
+    scene.remove(this.group);
+    this.group = null; // Set to null to avoid memory leaks
+    this.texture = null; // Set to null to avoid memory leaks
+    this.mesh = null; // Clear the mesh reference
+  }
   createMesh(scene, material, gridSize) {
     console.log(
       "Creating mesh for piece at grid position:",
