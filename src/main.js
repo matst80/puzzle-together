@@ -27,7 +27,7 @@ renderer.setPixelRatio(window.devicePixelRatio);
 
 // Lights
 const pointLight = new THREE.PointLight(0xffffff, 1.5, 100);
-pointLight.position.set(5, 5, 5);
+pointLight.position.set(1, 2, 5);
 pointLight.castShadow = true;
 pointLight.shadow.bias = -0.005;
 

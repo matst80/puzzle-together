@@ -286,7 +286,8 @@ export class Piece {
       if (
         this.isCloseToCorrectBoardPosition(
           this.group.position.x,
-          this.group.position.y
+          this.group.position.y,
+          0.01
         )
       ) {
         return;
@@ -343,10 +344,10 @@ export class Piece {
     };
   }
 
-  isCloseToCorrectBoardPosition(x, y) {
+  isCloseToCorrectBoardPosition(x, y, baseThreshold = 0.4) {
     const correct = this.getCorrectBoardPosition(this);
 
-    const threshold = this.size * 0.6;
+    const threshold = this.size * baseThreshold;
     const dx = x - correct.x;
     const dy = y - correct.y;
     //console.log({ delta: dx * dx + dy * dy, threshold: threshold * threshold });
@@ -431,7 +432,7 @@ export class Piece {
         // For each neighbor, check if the dragged position is close to the correct edge
         if (group.length === 1) {
           const neighbors = this.neighbors();
-          const threshold = this.size * 0.5;
+          const threshold = this.size * 0.4;
           for (const { piece: neighbor, dx, dy } of neighbors) {
             if (!neighbor) continue;
             const snapX = neighbor.group.position.x + dx;

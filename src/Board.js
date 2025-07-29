@@ -115,7 +115,7 @@ export class Board {
     }
     // Make the table much larger than the puzzle area
     const tableThickness = 0.2;
-    const tableMaterial = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
+    const tableMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
     const tableGeometry = new THREE.BoxGeometry(3, 3, tableThickness);
     const table = new THREE.Mesh(tableGeometry, tableMaterial);
     table.position.set(0, 0, 0);
@@ -180,7 +180,7 @@ export class Board {
     teapot.rotation.x = Math.PI / 2; // upright on table
     //teapot.rotation.z = Math.random() * Math.PI * 2; // random rotation
     teapot.castShadow = true;
-    teapot.receiveShadow = false;
+    teapot.receiveShadow = true;
     this.group.add(teapot);
 
     this._dragging = false;

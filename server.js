@@ -39,6 +39,8 @@ const PUZZLE_IMAGES = [
 function generateInitialPositions(gridSize = DEFAULT_GRID_SIZE) {
   const pieces = new Map();
   const usedBoxes = [];
+  // Define center exclusion zone (square centered at 0,0)
+  const exclusionHalfSize = 0.5; // Exclude -0.4 to 0.4 in both x and y
   for (let i = 0; i < gridSize; i++) {
     for (let j = 0; j < gridSize; j++) {
       let placed = false,
@@ -50,6 +52,16 @@ function generateInitialPositions(gridSize = DEFAULT_GRID_SIZE) {
       while (!placed && attempts < maxAttempts) {
         randX = Math.random() * 2.4 - 1.2;
         randY = Math.random() * 2.4 - 1.2;
+        // Exclude center region
+        if (
+          randX > -exclusionHalfSize &&
+          randX < exclusionHalfSize &&
+          randY > -exclusionHalfSize &&
+          randY < exclusionHalfSize
+        ) {
+          attempts++;
+          continue;
+        }
         let box = {
           minX: randX - pieceSize / 2,
           maxX: randX + pieceSize / 2,
