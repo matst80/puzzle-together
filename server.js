@@ -22,19 +22,18 @@ const httpServer = createServer((req, res) => {
 
 const DEFAULT_GRID_SIZE = 4;
 
-// Room state: { [roomId]: { pieces: Map<pieceId, {x, y, z, dragging}>, clients: Set<ws>, users: Map<ws, {username, score}>, correctPieces: Set<pieceId> } }
+// Room state: { [roomId]: { pieces: Map<pieceId, {x, y, z, dragging}>, clients: Set<ws>, users: Map<ws, {username, score}>, correctPieces: Set<pieceId>, imageUrl: string, cleanupTimeout?: NodeJS.Timeout } }
 const rooms = {};
 
 // List of random puzzle image URLs
 const PUZZLE_IMAGES = [
-  "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80", // Forest
-  "https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=600&q=80", // Mountain
-  "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=600&q=80", // Beach
-  "https://images.unsplash.com/photo-1465101178521-c1a9136a3b99?auto=format&fit=crop&w=600&q=80", // Lake
-  "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=600&q=80", // City
-  "https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=600&q=80", // Nature
-  "https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=600&q=80", // Flowers
-  "https://images.unsplash.com/photo-1465101178521-c1a9136a3b99?auto=format&fit=crop&w=600&q=80", // Water
+  "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1000&q=80", // Forest
+  "https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=1000&q=80", // Mountain
+  "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1000&q=80", // Beach
+
+  "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=1000&q=80", // City
+  "https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=1000&q=80", // Nature
+  "https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=1000&q=80", // Flowers
 ];
 
 function generateInitialPositions(gridSize = DEFAULT_GRID_SIZE) {
@@ -149,6 +148,7 @@ wss.on("connection", function connection(ws) {
         clients: new Set([ws]),
         users: new Map([[ws, { username: msg.username, score: 0 }]]),
         imageUrl,
+        // cleanupTimeout will be set if needed
       };
       ws.roomId = msg.roomId;
       ws.username = msg.username;
@@ -181,6 +181,11 @@ wss.on("connection", function connection(ws) {
       }
       rooms[msg.roomId].clients.add(ws);
       rooms[msg.roomId].users.set(ws, { username: msg.username, score: 0 });
+      // Cancel cleanup if it was scheduled
+      if (rooms[msg.roomId].cleanupTimeout) {
+        clearTimeout(rooms[msg.roomId].cleanupTimeout);
+        delete rooms[msg.roomId].cleanupTimeout;
+      }
       ws.roomId = msg.roomId;
       ws.username = msg.username;
       ws.send(
@@ -226,6 +231,22 @@ wss.on("connection", function connection(ws) {
           // Check if all pieces are correct
           if (room.correctPieces.size === room.pieces.size) {
             broadcastToRoom(msg.roomId, { type: "all-correct" });
+            // After 5s, send a new board with a new image
+            setTimeout(() => {
+              const newImageUrl =
+                PUZZLE_IMAGES[Math.floor(Math.random() * PUZZLE_IMAGES.length)];
+              room.pieces = generateInitialPositions(
+                (room.pieces.size ** 0.5) | 0
+              );
+              room.correctPieces = new Set();
+              room.imageUrl = newImageUrl;
+              broadcastToRoom(msg.roomId, {
+                type: "full-state",
+                roomId: msg.roomId,
+                pieces: Object.fromEntries(room.pieces),
+                imageUrl: newImageUrl,
+              });
+            }, 5000);
           }
         }
       }
@@ -243,11 +264,20 @@ wss.on("connection", function connection(ws) {
   ws.on("close", function () {
     // Remove from room
     if (ws.roomId && rooms[ws.roomId]) {
-      rooms[ws.roomId].clients.delete(ws);
-      rooms[ws.roomId].users.delete(ws);
+      const room = rooms[ws.roomId];
+      room.clients.delete(ws);
+      room.users.delete(ws);
       broadcastUserList(ws.roomId);
-      // Do NOT delete the room when the last user leaves; persist state
-      // Optionally, implement a timeout-based cleanup here if desired
+      // If no users left, schedule cleanup
+      if (room.clients.size === 0) {
+        room.cleanupTimeout = setTimeout(() => {
+          delete rooms[ws.roomId];
+          console.log(
+            `[SERVER] Room ${ws.roomId} deleted after 10s of inactivity.`
+          );
+        }, 10000);
+      }
+      // Do NOT delete the room immediately when the last user leaves; persist state for 10s
     }
   });
 });

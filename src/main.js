@@ -364,11 +364,18 @@ function handleWSMessage(data) {
       showUserList(msg.users);
       return;
     }
+    if (msg.type === "all-correct") {
+      // Show a completed message/animation for 5s
+      currentBoard.triggerCompletedAnimation();
+
+      return;
+    }
     if (msg.type === "full-state") {
       hideRoomModal();
       hideControls(); // Always hide controls for multiplayer
       boardReady = true;
       hideUserList(); // Hide before showing new list
+
       // Set slider to match room
       if (msg.pieces) {
         const pieceCount = Math.sqrt(Object.keys(msg.pieces).length) | 0;
@@ -386,8 +393,6 @@ function handleWSMessage(data) {
       currentBoard
     ) {
       currentBoard.pieceMovedByOtherPlayer(msg);
-    } else if (msg.type === "all-correct") {
-      currentBoard.triggerCompletedAnimation();
     } else if (msg.type === "error") {
       showRoomError(msg.error);
       showRoomModal();
@@ -421,23 +426,6 @@ function handleWSMessage(data) {
 //     );
 //   }, 2000);
 // }
-
-// Patch Board update to animate falling pieces
-const origBoardUpdate = Board.prototype.update;
-Board.prototype.update = function (scene) {
-  if (this.pieces) {
-    for (const piece of this.pieces) {
-      if (piece && piece._falling && piece.group) {
-        piece._fallVelocity = (piece._fallVelocity || 0) + 0.025;
-        piece.group.position.z -= piece._fallVelocity;
-        if (piece.group.position.z < -5) {
-          piece._falling = false;
-        }
-      }
-    }
-  }
-  origBoardUpdate.call(this, scene);
-};
 
 function createBoardWithState(piecesState) {
   disposeBoard();

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { Connector } from "./Connector";
 import { AnimationController } from "./AnimationController";
 import { mx_bilerp_1 } from "three/src/nodes/materialx/lib/mx_noise.js";
+import { rotate } from "three/tsl";
 
 export class Position {
   constructor(x, y) {
@@ -65,14 +66,17 @@ export class Piece {
     this.mesh = null; // Clear the mesh reference
   }
   triggerFallAnimation() {
-    this.animController.animateTo({
-      position: new THREE.Vector3(
-        this.group.position.x,
-        this.group.position.y,
-        -this.size * 0.5 // Fall down to below the board
-      ),
-      scale: new THREE.Vector3(0.1, 0.1, 0.1), // Scale down to 10%
-    });
+    this.animController.animateTo(
+      {
+        position: new THREE.Vector3(Math.random() * 3, Math.random() * 3, 4),
+        rotation: new THREE.Euler(
+          Math.random() * Math.PI * 2,
+          Math.random() * Math.PI * 2,
+          Math.random() * Math.PI * 2
+        ),
+      },
+      0.005
+    );
   }
   createMesh(scene, material, gridSize) {
     this.gridSize = gridSize;

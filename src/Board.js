@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Piece, Position } from "./piece";
+import { TeapotGeometry } from "three/examples/jsm/geometries/TeapotGeometry.js";
 
 export class Board {
   constructor(
@@ -143,6 +144,45 @@ export class Board {
       puzzleImage.receiveShadow = false;
       this.group.add(puzzleImage); // Add to group, not scene
     }
+    // --- Add a teapot in a random corner of the table ---
+    const corners = [
+      [1, 1],
+      [-1, 1],
+      [1, -1],
+      [-1, -1],
+    ];
+    const [cornerX, cornerY] =
+      corners[Math.floor(Math.random() * corners.length)];
+    const teapotGeometry = new TeapotGeometry(
+      0.13,
+      10,
+      true,
+      true,
+      true,
+      true,
+      true
+    );
+    const teapotMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0xff69b4,
+      metalness: 0.7,
+      roughness: 0.2,
+      clearcoat: 0.6,
+      clearcoatRoughness: 0.1,
+      transmission: 0.3,
+      ior: 1.4,
+    });
+    const teapot = new THREE.Mesh(teapotGeometry, teapotMaterial);
+    teapot.position.set(
+      cornerX * 1.2,
+      cornerY * 1.2,
+      tableThickness // base sits on table
+    );
+    teapot.rotation.x = Math.PI / 2; // upright on table
+    //teapot.rotation.z = Math.random() * Math.PI * 2; // random rotation
+    teapot.castShadow = true;
+    teapot.receiveShadow = false;
+    this.group.add(teapot);
+
     this._dragging = false;
     this._selectedPiece = null;
     this._dragOffset = new THREE.Vector3();
