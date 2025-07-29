@@ -223,14 +223,18 @@ wss.on("connection", function connection(ws) {
           room.users.get(ws).score += 1;
           room.correctPieces.add(msg.pieceId);
           broadcastUserList(msg.roomId);
+          // Check if all pieces are correct
+          if (room.correctPieces.size === room.pieces.size) {
+            broadcastToRoom(msg.roomId, { type: "all-correct" });
+          }
         }
       }
       // Broadcast to others in room
       broadcastToRoom(msg.roomId, msg, ws);
       // (Score logic can be added here)
-      console.log(
-        `[SERVER] Relayed ${msg.type} for ${msg.pieceId} in room ${msg.roomId}`
-      );
+      // console.log(
+      //   `[SERVER] Relayed ${msg.type} for ${msg.pieceId} in room ${msg.roomId}`
+      // );
       return;
     }
     ws.send(JSON.stringify({ type: "error", error: "Invalid message format" }));

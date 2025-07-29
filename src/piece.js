@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { Connector } from "./Connector";
 import { AnimationController } from "./AnimationController";
+import { mx_bilerp_1 } from "three/src/nodes/materialx/lib/mx_noise.js";
 
 export class Position {
   constructor(x, y) {
@@ -30,7 +31,7 @@ export class Piece {
   ) {
     this.gridX = gridX;
     this.gridY = gridY;
-    this.position = new Position(0, 0);
+    //this.position = new Position(0, 0);
     this.size = size;
     this.group = new THREE.Group();
     // Drag/animation state
@@ -62,6 +63,16 @@ export class Piece {
     this.group = null; // Set to null to avoid memory leaks
     this.texture = null; // Set to null to avoid memory leaks
     this.mesh = null; // Clear the mesh reference
+  }
+  triggerFallAnimation() {
+    this.animController.animateTo({
+      position: new THREE.Vector3(
+        this.group.position.x,
+        this.group.position.y,
+        -this.size * 0.5 // Fall down to below the board
+      ),
+      scale: new THREE.Vector3(0.1, 0.1, 0.1), // Scale down to 10%
+    });
   }
   createMesh(scene, material, gridSize) {
     this.gridSize = gridSize;
@@ -232,16 +243,42 @@ export class Piece {
     }
   }
   setPosition(position) {
-    this.position = position;
     this.group.position.set(
       position.x,
       position.y,
       this._dragPlaneZ // Use drag plane as default Z
     );
+    // if (!this.position) {
+    //   if (
+    //     !this.isCloseToCorrectBoardPosition(
+    //       this.group.position.x,
+    //       this.group.position.y
+    //     )
+    //   ) {
+    //     const rot = Math.random() * Math.PI * 2; // Random rotation
+    //     this.rotation = rot;
+    //     // add random rotation to avoid all pieces being aligned
+    //     this.animController.animateTo(
+    //       {
+    //         rotation: new THREE.Euler(0, 0, rot),
+    //       },
+    //       0.03
+    //     );
+    //   }
+    // }
+    this.position = position;
   }
   // Animate pickup (lift and scale up)
   pickup() {
     if (!this._dragging) {
+      // orient the piece correctly
+      // if (this.rotation) {
+      //   this.animController.animateTo(
+      //     { rotation: new THREE.Euler(0, 0, -this.rotation) },
+      //     0.03
+      //   );
+      // }
+
       if (
         this.isCloseToCorrectBoardPosition(
           this.group.position.x,
@@ -250,6 +287,7 @@ export class Piece {
       ) {
         return;
       }
+
       this._dragging = true;
       // Move all connected pieces up
       const group = Array.from(this.collectConnectedGroupByProperty());

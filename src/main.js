@@ -386,6 +386,8 @@ function handleWSMessage(data) {
       currentBoard
     ) {
       currentBoard.pieceMovedByOtherPlayer(msg);
+    } else if (msg.type === "all-correct") {
+      currentBoard.triggerCompletedAnimation();
     } else if (msg.type === "error") {
       showRoomError(msg.error);
       showRoomModal();
@@ -397,6 +399,45 @@ function handleWSMessage(data) {
     console.warn("Invalid WS message", data);
   }
 }
+
+// // --- All pieces fall animation and board reset ---
+// function triggerAllPiecesFallAnimation() {
+//   if (!currentBoard || !currentBoard.pieces) return;
+//   // Animate all pieces falling (set a velocity and animate in update)
+//   for (const piece of currentBoard.pieces) {
+//     if (piece && piece.group) {
+//       piece._falling = true;
+//       piece._fallVelocity = 0;
+//     }
+//   }
+//   // After 2 seconds, reset the board (request new state from server)
+//   setTimeout(() => {
+//     ws.send(
+//       JSON.stringify({
+//         type: "join-room",
+//         roomId: currentRoomId,
+//         username: localStorage.getItem("username") || "",
+//       })
+//     );
+//   }, 2000);
+// }
+
+// Patch Board update to animate falling pieces
+const origBoardUpdate = Board.prototype.update;
+Board.prototype.update = function (scene) {
+  if (this.pieces) {
+    for (const piece of this.pieces) {
+      if (piece && piece._falling && piece.group) {
+        piece._fallVelocity = (piece._fallVelocity || 0) + 0.025;
+        piece.group.position.z -= piece._fallVelocity;
+        if (piece.group.position.z < -5) {
+          piece._falling = false;
+        }
+      }
+    }
+  }
+  origBoardUpdate.call(this, scene);
+};
 
 function createBoardWithState(piecesState) {
   disposeBoard();

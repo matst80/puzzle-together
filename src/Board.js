@@ -180,7 +180,12 @@ export class Board {
       if (controls) controls.enabled = true;
     }
   }
-
+  triggerCompletedAnimation() {
+    // Trigger all pieces to fall down and fade out
+    for (const piece of this.pieces) {
+      piece.triggerFallAnimation();
+    }
+  }
   onPointerMove(event, camera, domElement, controls) {
     if (!this._dragging || !this._selectedPiece) return;
     const rect = domElement.getBoundingClientRect();
